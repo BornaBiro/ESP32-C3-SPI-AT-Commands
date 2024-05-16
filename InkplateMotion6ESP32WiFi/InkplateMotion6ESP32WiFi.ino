@@ -33,65 +33,85 @@ void setup()
     }
     Serial.println("ESP32 Initialization OK!");
 
-
-    char rxBuffer[32768];
-    if (!at.sendAtCommand("AT\r\n", rxBuffer, 100ULL))
+    if (!at.modemPing())
     {
-        Serial.println("AT Ping Fail!");
+        Serial.println("Modem Ping Fail!");
+        while (1);
     }
     else
     {
-        Serial.println("AT Ping Ok, response:\r\n");
-        Serial.println(rxBuffer);
+        Serial.println("Modem Pink OK!");
     }
 
-    if (!at.sendAtCommand("AT+CWINIT=1\r\n", rxBuffer, 100ULL))
+    if (!at.wifiDisconnect())
     {
-        Serial.println("AT+CWINIT Fail!");
+        Serial.println("WiFi disconnect Fail!");
+        while (1);
     }
     else
     {
-        Serial.println("AT+CWINIT, response:\r\n");
-        Serial.println(rxBuffer);
+        Serial.println("WiFi disconnected");
     }
 
-    if (!at.sendAtCommand("AT+CWMODE=1\r\n", rxBuffer, 100ULL))
-    {
-        Serial.println("AT+CWMODE Fail!");
-    }
-    else
-    {
-        Serial.println("AT+CWMODE, response:\r\n");
-        Serial.println(rxBuffer);
-    }
+    while (1);
+    // char rxBuffer[32768];
+    // if (!at.sendAtCommand("AT\r\n", rxBuffer, 100ULL))
+    // {
+    //     Serial.println("AT Ping Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT Ping Ok, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
 
-    if (!at.sendAtCommand("AT+CWLAP\r\n", rxBuffer, 10000ULL))
-    {
-        Serial.println("AT+CWLAP Fail!");
-    }
-    else
-    {
-        Serial.println("AT+CWLAP, response:\r\n");
-        Serial.println(rxBuffer);
-    }
-    if (!at.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n", rxBuffer, 10000ULL))
-    {
-        Serial.println("AT+CWJAP Fail!");
-    }
-    else
-    {
-        Serial.println("AT+CWJAP, response:\r\n");
-        Serial.println(rxBuffer);
-    }
-    if (!at.sendAtCommand("AT+HTTPCGET=\"https://www.timeapi.io/api/TimeZone/AvailableTimeZones\"\r\n", rxBuffer, 10000ULL))
-    {
-        Serial.println("AT+HTTPCGET Fail!");
-    }
-    else
-    {
-        Serial.println("AT+HTTPCGET, response:\r\n");
-        Serial.println(rxBuffer);
-    }
+    // if (!at.sendAtCommand("AT+CWINIT=1\r\n", rxBuffer, 100ULL))
+    // {
+    //     Serial.println("AT+CWINIT Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT+CWINIT, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
+
+    // if (!at.sendAtCommand("AT+CWMODE=1\r\n", rxBuffer, 100ULL))
+    // {
+    //     Serial.println("AT+CWMODE Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT+CWMODE, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
+
+    // if (!at.sendAtCommand("AT+CWLAP\r\n", rxBuffer, 10000ULL))
+    // {
+    //     Serial.println("AT+CWLAP Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT+CWLAP, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
+    // if (!at.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n", rxBuffer, 10000ULL))
+    // {
+    //     Serial.println("AT+CWJAP Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT+CWJAP, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
+    // if (!at.sendAtCommand("AT+HTTPCGET=\"https://www.timeapi.io/api/TimeZone/AvailableTimeZones\"\r\n", rxBuffer, 10000ULL))
+    // {
+    //     Serial.println("AT+HTTPCGET Fail!");
+    // }
+    // else
+    // {
+    //     Serial.println("AT+HTTPCGET, response:\r\n");
+    //     Serial.println(rxBuffer);
+    // }
 
 
     // Initialize the Inkplate Motion Library.

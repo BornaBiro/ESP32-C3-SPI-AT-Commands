@@ -64,14 +64,8 @@ void AtSpi::power(bool _en)
 
 }
 
-bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _timeout)
+bool AtSpi::sendAtCommand(char *_atCommand)
 {
-    // Timeout variable.
-    unsigned long _timeoutCounter = 0;
-
-    // Variable for the response array index offset.
-    uint32_t _resposeArrayOffset = 0;
-
     // Get the data size.
     uint16_t _dataLen = strlen(_atCommand);
 
@@ -91,41 +85,94 @@ bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _time
     // Send data end.
     dataSendEnd();
 
+    return true;
+}
+
+bool AtSpi::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
+{
+    // Timeout variable.
+    unsigned long _timeoutCounter = 0;
+
+    // Variable for the response array index offset.
+    uint32_t _resposeArrayOffset = 0;
+
     // Capture the time!
     _timeoutCounter = millis();
 
     // Now loop until the timeout occurs
     while ((unsigned long)(millis() - _timeoutCounter) < _timeout)
     {
-        // Wait for the response by reading the handshake pin.
-        if (waitForHandshakePinInt(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS))
+        // Wait for the response by checking the handshake pin.
+        if (_esp32HandshakePinFlag)
         {
+            // Clear the flag.
+            _esp32HandshakePinFlag = false;
+
             // Update the timeout!
             _timeoutCounter = millis();
 
             // Read the slave status.
             uint16_t _responseLen = 0;
-            _slaveStatus = requestSlaveStatus(&_responseLen);
+            uint8_t _slaveStatus = requestSlaveStatus(&_responseLen);
 
             // Check the slave status, if must be INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE
             if (_slaveStatus != INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE) return false;
 
-            // Read the data.
-            dataRead((uint8_t*)(_response + _resposeArrayOffset), _responseLen);
+            // Check if there is enough free memory in the buffer. If there is still free memory,
+            // get the response. Otherwise, drop everything.
+            if ((_responseLen + _resposeArrayOffset) < _bufferLen)
+            {
+                // Read the data.
+                dataRead((uint8_t*)(_response + _resposeArrayOffset), _responseLen);
 
-            // Move the index in response array.
-            _resposeArrayOffset += _responseLen;
+                // Move the index in response array.
+                _resposeArrayOffset += _responseLen;
+            }
 
             // Send read done.
             dataReadEnd();
-
-            // Wait until the handshake pin is set to low.
-            //waitForHandshakePinInt(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS, LOW);
         }
     }
 
     // Add null-terminating char.
     _response[_resposeArrayOffset] = '\0';
+
+    // Evertything went ok? Return true!
+    return true;
+}
+
+bool AtSpi::modemPing()
+{
+    // Send "AT" AT Command for Modem Ping.
+    sendAtCommand((char*)esp32AtPingCommand);
+
+    // Wait for the response from the modem.
+    if (!getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 10ULL)) return false;
+
+    // Check if AT\r\n\r\nOK\r\n\r\n is received.
+    if (strcmp((char*)_dataBuffer, esp32AtPingResponse) != 0) return false;
+
+    // If everything went ok, return true.
+    return true;
+}
+
+bool AtSpi::wifiDisconnect()
+{
+    // // Check for WiFi connect.
+    // if (getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 2000ULL))
+    // {
+    //     Serial.println("result befor dissconnect:");
+    //     Serial.println((char*)_dataBuffer);
+    // }
+
+    // Sent AT command for WiFi Disconnect.
+    sendAtCommand((char*)esp32AtWiFiDisconnectCommand);
+
+    // Wait for the response from the modem.
+    if (!getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
+
+    // Check if the proper response arrived from the modem.
+    if (strcmp((char*)_dataBuffer, esp32AtWiFiDisconnectresponse) != 0) return false;
 
     return true;
 }
@@ -211,7 +258,6 @@ uint8_t AtSpi::requestSlaveStatus(uint16_t *_len)
 void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
     // Activate ESP32 SPI lines by pulling CS pin to low.
-    //digitalWrite(INKPLATE_ESP32_CS_PIN, LOW);
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
 
     // Send everything, but the data.
@@ -224,7 +270,6 @@ void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiData
     SPI.endTransaction();
 
     // Disable ESP32 SPI lines by pulling CS pin to high.
-    //digitalWrite(INKPLATE_ESP32_CS_PIN, HIGH);
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
@@ -293,18 +338,11 @@ bool AtSpi::dataSendEnd()
     return true;
 }
 
-bool AtSpi::dataRead(uint8_t *_dataBuffer, uint32_t _len)
+bool AtSpi::dataRead(uint8_t *_dataBuffer, uint16_t _len)
 {
     // Before reading the data:
     // 1. Make a request for data read.
     // 2. Read and check slave status - It should return with INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE.
-
-    // Calculate the number of chunks to send, since the max is 4092 bytes.
-    uint16_t _chunks = _len / INKPLATE_ESP32_SPI_MAX_MESAGE_DATA_BUFFER;
-    uint16_t _lastChunk = _chunks?_len % INKPLATE_ESP32_SPI_MAX_MESAGE_DATA_BUFFER:_len;
-
-    // Address offset for the data packet.
-    uint32_t _dataPacketAddrOffset = 0;
 
     // Create an data packet for data send.
     struct spiAtCommandTypedef _spiDataSend = 
@@ -315,29 +353,8 @@ bool AtSpi::dataRead(uint8_t *_dataBuffer, uint32_t _len)
         .data = _dataBuffer
     };
 
-    // Go trough the chunks.
-    while (_chunks--)
-    {
-        // Calculate the chunk size.
-        uint16_t _chunkSize = _chunks != 0?INKPLATE_ESP32_SPI_MAX_MESAGE_DATA_BUFFER:_lastChunk;
-
-        // Transfer the data!
-        transferSpiPacket(&_spiDataSend, _chunkSize);
-
-        // Update the address position and data.
-        _dataPacketAddrOffset+= _chunkSize;
-
-        // Update the SPI ESP32 packer header.
-        _spiDataSend.data = _dataBuffer + _chunkSize;
-        _spiDataSend.cmd = INKPLATE_ESP32_SPI_CMD_MASTER_READ_DATA;
-        _spiDataSend.addr = 0x00;
-        _spiDataSend.dummy = 0x00;
-
-        // Data end cmd? Don't know...Needs to be checked!
-    }
-
     // Read the last one chunk (or the only one if the _len < 4092).
-    transferSpiPacket(&_spiDataSend, _lastChunk);
+    transferSpiPacket(&_spiDataSend, _len);
 
     // Return true for success.
     return true;
@@ -392,52 +409,41 @@ bool AtSpi::dataSendRequest(uint16_t _len, uint8_t _seqNumber)
 
 bool AtSpi::isModemReady()
 {
-    //if (waitForHandshakePin(5000ULL, LOW))
-    //{
-        if (waitForHandshakePinInt(5000ULL))
+    if (waitForHandshakePinInt(5000ULL))
+    {
+        // Check for the request, since the Handshake pin is high.
+        // Also get the data lenght.
+        uint16_t _dataLen = 0;
+        if (requestSlaveStatus(&_dataLen) == INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE)
         {
-            // Check for the request, since the Handshake pin is high.
-            // Also get the data lenght.
-            uint16_t _dataLen = 0;
-            if (requestSlaveStatus(&_dataLen) == INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE)
+            // Ok, now try to read the data. First fill the ESP32 read packet
+            dataRead(_dataBuffer, _dataLen);
+
+            // Finish data read.
+            dataReadEnd();
+
+            // Parse the data!
+            // Add null-terminating char at the end.
+            _dataBuffer[_dataLen] = '\0';
+
+            // Compare it. It should find "\r\nready\r\n".
+            if (strcmp("\r\nready\r\n", (char*)_dataBuffer) != 0)
             {
-                // Ok, now try to read the data. First fill the ESP32 read packet
-                dataRead(_dataBuffer, _dataLen);
-
-                // Finish data read.
-                dataReadEnd();
-
-                // Parse the data!
-                // Add null-terminating char at the end.
-                _dataBuffer[_dataLen] = '\0';
-
-                // Compare it. It should find "\r\nready\r\n".
-                if (strcmp("\r\nready\r\n", (char*)_dataBuffer) != 0)
-                {
-                    Serial.println("modem ready parse error!");
-                    return false;
-                }
-            }
-            else
-            {
-                Serial.println("Wrong slave request");
+                Serial.println("modem ready parse error!");
                 return false;
             }
         }
         else
         {
-            Serial.println("Handshake not detected");
+            Serial.println("Wrong slave request");
             return false;
         }
-    //}
-    //else
-    //{
-    //    Serial.println("Handshake init fail.");
-    //    return false;
-    //}
-
-    // Wait until the handshake line is set to low.
-    //waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS, LOW);
+    }
+    else
+    {
+        Serial.println("Handshake not detected");
+        return false;
+    }
 
     // Modem ready? Return true for success!
     return true;

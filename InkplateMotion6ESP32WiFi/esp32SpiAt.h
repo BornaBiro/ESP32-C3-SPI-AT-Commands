@@ -11,6 +11,9 @@
 // Include SPI AT Message typedefs.
 #include "WiFiSPITypedef.h"
 
+// Include file with all AT Commands.
+#include "esp32SpiAtAllCommands.h"
+
 // GPIO pin for the ESP32 Power Supply Switch.
 #define INKPLATE_ESP32_PWR_SWITCH_PIN PG9
 
@@ -29,16 +32,23 @@ class AtSpi
         AtSpi();
         bool begin();
         void power(bool _en);
-        bool sendAtCommand(char *_atCommand, char *_response, unsigned long _timeout);
+        bool sendAtCommand(char *_atCommand);
+        bool getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
+        bool modemPing();
+        bool wifiDisconnect();
+
     private:
         bool waitForHandshakePin(uint32_t _timeoutValue, bool _validState = HIGH);
         bool waitForHandshakePinInt(uint32_t _timeoutValue);
         uint8_t requestSlaveStatus(uint16_t *_len = NULL);
         bool dataSend(uint8_t *_dataBuffer, uint32_t _len);
         bool dataSendEnd();
-        bool dataRead(uint8_t *_dataBuffer, uint32_t _len);
+        bool dataRead(uint8_t *_dataBuffer, uint16_t _len);
         bool dataReadEnd();
         bool dataSendRequest(uint16_t _len, uint8_t _seqNumber);
+
+        bool readResponse(uint8_t *_buffer, uint32_t _bufferSize);
+
         void transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiPacketLen);
         bool isModemReady();
 
