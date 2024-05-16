@@ -33,8 +33,9 @@ void setup()
     }
     Serial.println("ESP32 Initialization OK!");
 
+
     char rxBuffer[32768];
-    if (!at.sendAtCommand("AT\r\n", rxBuffer, 1000ULL))
+    if (!at.sendAtCommand("AT\r\n", rxBuffer, 100ULL))
     {
         Serial.println("AT Ping Fail!");
     }
@@ -44,7 +45,7 @@ void setup()
         Serial.println(rxBuffer);
     }
 
-    if (!at.sendAtCommand("AT+CWINIT=1\r\n", rxBuffer, 1000ULL))
+    if (!at.sendAtCommand("AT+CWINIT=1\r\n", rxBuffer, 100ULL))
     {
         Serial.println("AT+CWINIT Fail!");
     }
@@ -54,7 +55,7 @@ void setup()
         Serial.println(rxBuffer);
     }
 
-    if (!at.sendAtCommand("AT+CWMODE=1\r\n", rxBuffer, 1000ULL))
+    if (!at.sendAtCommand("AT+CWMODE=1\r\n", rxBuffer, 100ULL))
     {
         Serial.println("AT+CWMODE Fail!");
     }
@@ -66,11 +67,29 @@ void setup()
 
     if (!at.sendAtCommand("AT+CWLAP\r\n", rxBuffer, 10000ULL))
     {
-        Serial.println("AT+CWMODE Fail!");
+        Serial.println("AT+CWLAP Fail!");
     }
     else
     {
         Serial.println("AT+CWLAP, response:\r\n");
+        Serial.println(rxBuffer);
+    }
+    if (!at.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n", rxBuffer, 10000ULL))
+    {
+        Serial.println("AT+CWJAP Fail!");
+    }
+    else
+    {
+        Serial.println("AT+CWJAP, response:\r\n");
+        Serial.println(rxBuffer);
+    }
+    if (!at.sendAtCommand("AT+HTTPCGET=\"https://www.timeapi.io/api/TimeZone/AvailableTimeZones\"\r\n", rxBuffer, 10000ULL))
+    {
+        Serial.println("AT+HTTPCGET Fail!");
+    }
+    else
+    {
+        Serial.println("AT+HTTPCGET, response:\r\n");
         Serial.println(rxBuffer);
     }
 

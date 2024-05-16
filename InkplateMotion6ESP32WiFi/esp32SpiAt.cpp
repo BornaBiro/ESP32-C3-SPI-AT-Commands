@@ -1,14 +1,14 @@
 // Include header file.
 #include "esp32SpiAt.h"
 
-// // Flag for the handshake for the ESP32.
-// static volatile bool _esp32HandshakePinFlag = false;
+// Flag for the handshake for the ESP32.
+static volatile bool _esp32HandshakePinFlag = false;
 
-// // ISR for the ESP32 handshake pin. This will be called automatically from the interrupt.
-// static void esp32HandshakeISR()
-// {
-//     _esp32HandshakePinFlag = true;
-// }
+// ISR for the ESP32 handshake pin. This will be called automatically from the interrupt.
+static void esp32HandshakeISR()
+{
+    _esp32HandshakePinFlag = true;
+}
 
 // Define a constructor.
 AtSpi::AtSpi()
@@ -30,6 +30,9 @@ bool AtSpi::begin()
 
     // Set handshake pin.
     pinMode(INKPLATE_ESP32_HANDSHAKE_PIN, INPUT_PULLUP);
+
+    // Set interrupt on handshake pin.
+    attachInterrupt(digitalPinToInterrupt(INKPLATE_ESP32_HANDSHAKE_PIN), esp32HandshakeISR, RISING);
 
     // Set SPI CS Pin.
     pinMode(INKPLATE_ESP32_CS_PIN, OUTPUT);
@@ -73,10 +76,7 @@ bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _time
     uint16_t _dataLen = strlen(_atCommand);
 
     // First make a request for data send.
-    dataReadRequest(_dataLen, 1);
-
-    // Wait for the handshake.
-    if (!waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS)) return false;
+    dataSendRequest(_dataLen, 1);
 
     // Read the slave status.
     uint8_t _slaveStatus = 0;
@@ -91,9 +91,6 @@ bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _time
     // Send data end.
     dataSendEnd();
 
-    // Wait until the handshake pin is set to low.
-    waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS, LOW);
-
     // Capture the time!
     _timeoutCounter = millis();
 
@@ -101,7 +98,7 @@ bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _time
     while ((unsigned long)(millis() - _timeoutCounter) < _timeout)
     {
         // Wait for the response by reading the handshake pin.
-        if (waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS))
+        if (waitForHandshakePinInt(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS))
         {
             // Update the timeout!
             _timeoutCounter = millis();
@@ -123,7 +120,7 @@ bool AtSpi::sendAtCommand(char *_atCommand, char *_response, unsigned long _time
             dataReadEnd();
 
             // Wait until the handshake pin is set to low.
-            waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS, LOW);
+            //waitForHandshakePinInt(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_SHORT_MS, LOW);
         }
     }
 
@@ -153,6 +150,27 @@ bool AtSpi::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
         // Wait a little bit.
         delay(1);
     } while (((unsigned long)(millis() - _timeout) < _timeoutValue) && (_handshakePinState != _validState));
+
+    // Check the state of the timeout. If timeout occured, return false.
+    if ((millis() - _timeout) >= _timeoutValue) return false;
+
+    // Otherwise return true.
+    return true;
+}
+
+bool AtSpi::waitForHandshakePinInt(uint32_t _timeoutValue)
+{
+    // First, clear the flag status.
+    _esp32HandshakePinFlag = false;
+
+    // Variable for the timeout. Also capture the current state.
+    unsigned long _timeout = millis();
+
+    // Wait for the rising edge in Handshake pin.
+    while (((unsigned long)(millis() - _timeout) < _timeoutValue) && (!_esp32HandshakePinFlag));
+
+    // Clear the flag.
+    _esp32HandshakePinFlag = false;
 
     // Check the state of the timeout. If timeout occured, return false.
     if ((millis() - _timeout) >= _timeoutValue) return false;
@@ -193,10 +211,11 @@ uint8_t AtSpi::requestSlaveStatus(uint16_t *_len)
 void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
     // Activate ESP32 SPI lines by pulling CS pin to low.
-    digitalWrite(INKPLATE_ESP32_CS_PIN, LOW);
+    //digitalWrite(INKPLATE_ESP32_CS_PIN, LOW);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
 
     // Send everything, but the data.
-    SPI.beginTransaction(SPISettings(10000000ULL, MSBFIRST, SPI_MODE0));
+    SPI.beginTransaction(SPISettings(20000000ULL, MSBFIRST, SPI_MODE0));
     SPI.transfer(_spiPacket->cmd);
     SPI.transfer(_spiPacket->addr);
     SPI.transfer(_spiPacket->dummy);
@@ -205,7 +224,8 @@ void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiData
     SPI.endTransaction();
 
     // Disable ESP32 SPI lines by pulling CS pin to high.
-    digitalWrite(INKPLATE_ESP32_CS_PIN, HIGH);
+    //digitalWrite(INKPLATE_ESP32_CS_PIN, HIGH);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
 bool AtSpi::dataSend(uint8_t *_dataBuffer, uint32_t _len)
@@ -341,7 +361,7 @@ bool AtSpi::dataReadEnd()
     return true;
 }
 
-bool AtSpi::dataReadRequest(uint16_t _len, uint8_t _seqNumber)
+bool AtSpi::dataSendRequest(uint16_t _len, uint8_t _seqNumber)
 {
     // Create the structure for the ESP32 SPI.
     // Data field data info field now (spiAtCommandDataInfoTypedef union).
@@ -354,7 +374,7 @@ bool AtSpi::dataReadRequest(uint16_t _len, uint8_t _seqNumber)
 
     struct spiAtCommandTypedef _spiDataSend = 
     {
-        .cmd = INKPLATE_ESP32_SPI_CMD_REQ_TO_READ_DATA,
+        .cmd = INKPLATE_ESP32_SPI_CMD_REQ_TO_SEND_DATA,
         .addr = 0,
         .dummy = 0,
         .data = (uint8_t*)&(_dataInfo.bytes),
@@ -364,7 +384,7 @@ bool AtSpi::dataReadRequest(uint16_t _len, uint8_t _seqNumber)
     transferSpiPacket(&_spiDataSend, sizeof(_dataInfo.bytes));
 
     // Wait for the handshake!
-    bool _ret = waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS, true);
+    bool _ret = waitForHandshakePinInt(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS);
 
     // Return the success status. If timeout occured, data read req. has failed.
     return _ret;
@@ -372,9 +392,9 @@ bool AtSpi::dataReadRequest(uint16_t _len, uint8_t _seqNumber)
 
 bool AtSpi::isModemReady()
 {
-    if (waitForHandshakePin(5000ULL, LOW))
-    {
-        if (waitForHandshakePin(5000ULL, HIGH))
+    //if (waitForHandshakePin(5000ULL, LOW))
+    //{
+        if (waitForHandshakePinInt(5000ULL))
         {
             // Check for the request, since the Handshake pin is high.
             // Also get the data lenght.
@@ -409,15 +429,15 @@ bool AtSpi::isModemReady()
             Serial.println("Handshake not detected");
             return false;
         }
-    }
-    else
-    {
-        Serial.println("Handshake init fail.");
-        return false;
-    }
+    //}
+    //else
+    //{
+    //    Serial.println("Handshake init fail.");
+    //    return false;
+    //}
 
     // Wait until the handshake line is set to low.
-    waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS, LOW);
+    //waitForHandshakePin(INKPLATE_ESP32_SPI_HANDSHAKE_TIMEOUT_MS, LOW);
 
     // Modem ready? Return true for success!
     return true;

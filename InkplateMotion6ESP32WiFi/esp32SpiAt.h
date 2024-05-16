@@ -32,12 +32,13 @@ class AtSpi
         bool sendAtCommand(char *_atCommand, char *_response, unsigned long _timeout);
     private:
         bool waitForHandshakePin(uint32_t _timeoutValue, bool _validState = HIGH);
+        bool waitForHandshakePinInt(uint32_t _timeoutValue);
         uint8_t requestSlaveStatus(uint16_t *_len = NULL);
         bool dataSend(uint8_t *_dataBuffer, uint32_t _len);
         bool dataSendEnd();
         bool dataRead(uint8_t *_dataBuffer, uint32_t _len);
         bool dataReadEnd();
-        bool dataReadRequest(uint16_t _len, uint8_t _seqNumber);
+        bool dataSendRequest(uint16_t _len, uint8_t _seqNumber);
         void transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiPacketLen);
         bool isModemReady();
 
