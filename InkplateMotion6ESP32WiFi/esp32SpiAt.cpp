@@ -16,7 +16,7 @@ AtSpi::AtSpi()
     // Empty...for now!
 }
 
-bool AtSpi::begin()
+bool AtSpi::init()
 {
     // Set the hardware level stuff first.
     
@@ -55,6 +55,12 @@ bool AtSpi::begin()
     // then wait for the proper handshake event.
     if (!isModemReady()) return false;
 
+    // Try to ping modem. Return fail if failed.
+    if (!modemPing()) return false;
+
+    // Initialize WiFi radio.
+    if (!wiFiModemInit(true)) return false;
+
     // If everything went ok, return true.
     return true;
 }
@@ -80,7 +86,7 @@ bool AtSpi::sendAtCommand(char *_atCommand)
     if (_slaveStatus != INKPLATE_ESP32_SPI_SLAVE_STATUS_WRITEABLE) return false;
 
     // Send the data.
-    dataSend((uint8_t*)_atCommand, _dataLen);
+    dataSend(_atCommand, _dataLen);
 
     // Send data end.
     dataSendEnd();
@@ -123,7 +129,7 @@ bool AtSpi::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _t
             if ((_responseLen + _resposeArrayOffset) < _bufferLen)
             {
                 // Read the data.
-                dataRead((uint8_t*)(_response + _resposeArrayOffset), _responseLen);
+                dataRead((_response + _resposeArrayOffset), _responseLen);
 
                 // Move the index in response array.
                 _resposeArrayOffset += _responseLen;
@@ -156,25 +162,134 @@ bool AtSpi::modemPing()
     return true;
 }
 
-bool AtSpi::wifiDisconnect()
+bool AtSpi::setMode(uint8_t _wifiMode)
 {
-    // // Check for WiFi connect.
-    // if (getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 2000ULL))
-    // {
-    //     Serial.println("result befor dissconnect:");
-    //     Serial.println((char*)_dataBuffer);
-    // }
+    // Check for the proper mode.
+    if ((_wifiMode > INKPLATE_WIFI_MODE_STA_AP)) return false;
 
+    // Create AT Command string depending on the mode.
+    sprintf(_dataBuffer, "AT+CWMODE=%d\r\n", _wifiMode);
+
+    // Issue a AT Command for WiFi Mode.
+    sendAtCommand(_dataBuffer);
+
+    // Wait for the response.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 200ULL)) return false;
+
+    // Check for the result.
+    if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
+
+    // Otherwise, return ok.
+    return true;
+}
+
+bool AtSpi::begin(char *_ssid, char* _pass)
+{
+    // Check for user mistake (null-pointer!).
+    if ((_ssid == NULL) || (_pass == NULL)) return false;
+
+    // Create string for AT comamnd.
+    sprintf(_dataBuffer, "AT+CWJAP=\"%s\",\"%s\"\r\n", _ssid, _pass);
+
+    // Issue an AT Command to the modem.
+    sendAtCommand(_dataBuffer);
+
+    // Do not wait for response eventhough modem will send reponse as soon as the WiFi connection is established.
+    return true;
+}
+
+
+bool AtSpi::connected()
+{
+    // Flush AT Read Request.
+    requestSlaveStatus();
+    dataReadEnd();
+
+    // Create AT Command string to check WiFi connection status.
+    sprintf(_dataBuffer, "AT+CWSTATE?\r\n");
+    
+    // Issue a AT Command for WiFi Mode.
+    sendAtCommand(_dataBuffer);
+
+    // Wait for the response.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
+
+    // Find start of the response. Return false if failed.
+    char *_responseStart = strstr(_dataBuffer, "+CWSTATE:");
+    if (_responseStart == NULL) return false;
+
+    // Parse the data.
+    int _result;
+    if (sscanf(_responseStart, "+CWSTATE:%d", &_result) != 1) return false;
+
+    return (_result == 2)?true:false;
+}
+
+bool AtSpi::disconnect()
+{
     // Sent AT command for WiFi Disconnect.
     sendAtCommand((char*)esp32AtWiFiDisconnectCommand);
 
     // Wait for the response from the modem.
-    if (!getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
 
     // Check if the proper response arrived from the modem.
-    if (strcmp((char*)_dataBuffer, esp32AtWiFiDisconnectresponse) != 0) return false;
+    if (strcmp(_dataBuffer, esp32AtWiFiDisconnectresponse) != 0) return false;
 
     return true;
+}
+
+int AtSpi::scanNetworks()
+{
+    // Issue a WiFi Scan command.
+    sendAtCommand((char*)esp32AtWiFiScan);
+
+    // First the modem will echo back AT Command and do the disconnect.
+    // If this does not happen, sometinhg is wrong, return error.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50UL)) return 0;
+
+    // Now wait for about 3 seconds for the WiFi scan to complete.
+    // If failed for some reason, return error.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 2500UL)) return 0;
+
+    char *_wifiAPStart = strstr(_dataBuffer, "+CWLAP:");
+
+    // Parse how many networks have been found.
+    while (_wifiAPStart != NULL)
+    {
+        _startApindex[_foundWiFiAp] = _wifiAPStart - _dataBuffer;
+        _foundWiFiAp++;
+        _wifiAPStart = strstr(_wifiAPStart + 1, "+CWLAP:");
+    }
+
+    return _foundWiFiAp;
+}
+
+char* AtSpi::ssid(int _ssidNumber)
+{
+    // Check if the parsing is successfull. If not, return empty string.
+    if (!parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData)) return " ";
+
+    // If parsing is successfull, return SSID name.
+    return _lastUsedSsidData.ssidName;
+}
+
+bool AtSpi::auth(int _ssidNumber)
+{
+    // Parse the found network data.
+    parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData);
+
+    // If parsing is successfull, return auth status (false = open network, true = password locked".
+    return _lastUsedSsidData.authType?true:false;
+}
+
+int AtSpi::rssi(int _ssidNumber)
+{
+    // Parse the found network data.
+    parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData);
+
+    // If parsing is successfull, return RSSI.
+    return _lastUsedSsidData.rssi;
 }
 
 bool AtSpi::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
@@ -273,7 +388,7 @@ void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiData
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
-bool AtSpi::dataSend(uint8_t *_dataBuffer, uint32_t _len)
+bool AtSpi::dataSend(char *_dataBuffer, uint32_t _len)
 {
     // Before sending data:
     // 1. Make a request for data send
@@ -292,7 +407,7 @@ bool AtSpi::dataSend(uint8_t *_dataBuffer, uint32_t _len)
         .cmd = INKPLATE_ESP32_SPI_CMD_MASTER_SEND,
         .addr = 0x00,
         .dummy = 0x00,
-        .data = _dataBuffer
+        .data = (uint8_t*)(_dataBuffer)
     };
 
     // Go trough the chunks.
@@ -308,7 +423,7 @@ bool AtSpi::dataSend(uint8_t *_dataBuffer, uint32_t _len)
         _dataPacketAddrOffset+= _chunkSize;
 
         // Update the SPI ESP32 packer header.
-        _spiDataSend.data = _dataBuffer + _chunkSize;
+        _spiDataSend.data = (uint8_t*)(_dataBuffer + _chunkSize);
 
         // Data end cmd? Don't know...Needs to be checked!
     }
@@ -338,7 +453,7 @@ bool AtSpi::dataSendEnd()
     return true;
 }
 
-bool AtSpi::dataRead(uint8_t *_dataBuffer, uint16_t _len)
+bool AtSpi::dataRead(char *_dataBuffer, uint16_t _len)
 {
     // Before reading the data:
     // 1. Make a request for data read.
@@ -350,7 +465,7 @@ bool AtSpi::dataRead(uint8_t *_dataBuffer, uint16_t _len)
         .cmd = INKPLATE_ESP32_SPI_CMD_MASTER_READ_DATA,
         .addr = 0x00,
         .dummy = 0x00,
-        .data = _dataBuffer
+        .data = (uint8_t*)(_dataBuffer)
     };
 
     // Read the last one chunk (or the only one if the _len < 4092).
@@ -446,5 +561,44 @@ bool AtSpi::isModemReady()
     }
 
     // Modem ready? Return true for success!
+    return true;
+}
+
+bool AtSpi::wiFiModemInit(bool _status)
+{
+    // Create a AT Commands String depending on the WiFi Initialization status.
+    sprintf(_dataBuffer, "AT+CWINIT=%d\r\n", _status);
+
+    // Send AT command to the modem.
+    sendAtCommand(_dataBuffer);
+
+    // Wait for the response.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 250ULL)) return false;
+
+    // Parse it. Check for the OK string.
+    if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
+
+    // Otherwise return true.
+    return true;
+}
+
+bool AtSpi::parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumber, struct spiAtWiFiScanTypedef *_scanData)
+{
+    // Check if the last used SSID number matches current one. If so, do not need to parse anything.
+    if (*_lastUsedSsidNumber == _ssidNumber) return true;
+
+    // If not, check for the SSID number.
+    if (_ssidNumber > _foundWiFiAp) return false;
+
+    // Try to parse it!
+    int _result = sscanf(_dataBuffer + _startApindex[_ssidNumber], "+CWLAP:(%d,\"%[^\",]\",%d", &_scanData->authType, _scanData->ssidName, &_scanData->rssi);
+
+    // Check for parsing. If 3 parameters have been found, parsing is successfull.
+    if (_result != 3) return false;
+
+    // Otherwise set current one SSID number as last used SSID number.
+    *_lastUsedSsidNumber = _ssidNumber;
+
+    // Return true as success.
     return true;
 }

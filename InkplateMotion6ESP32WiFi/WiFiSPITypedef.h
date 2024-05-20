@@ -13,6 +13,13 @@
 #define INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE    0x01
 #define INKPLATE_ESP32_SPI_SLAVE_STATUS_WRITEABLE   0x02
 
+// ESP32 WiFi related stuff.
+#define INKPLATE_WIFI_MODE_NULL     0x00
+#define INKPLATE_WIFI_MODE_STA      0x01
+#define INKPLATE_WIFI_MODE_AP       0x02
+#define INKPLATE_WIFI_MODE_STA_AP   0x03
+
+
 // ESP32 dependant stuff.
 #define INKPLATE_ESP32_SPI_MAX_MESAGE_DATA_BUFFER           4092
 #define INKPLATE_ESP32_SPI_DATA_INFO_MAGIC_NUM              0xFE
@@ -26,6 +33,13 @@ struct spiAtCommandTypedef
     uint8_t addr;
     uint8_t dummy;
     uint8_t *data;
+};
+
+struct spiAtWiFiScanTypedef
+{
+    int authType;
+    int rssi;
+    char ssidName[65];
 };
 
 union spiAtCommandDataInfoTypedef

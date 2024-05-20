@@ -11,7 +11,7 @@
 Inkplate inkplate;
 
 // Create an object for the AT commands over SPI commands.
-AtSpi at;
+AtSpi wifi;
 
 void setup()
 {
@@ -22,7 +22,7 @@ void setup()
     Serial.println("Inkplate Motion Code Started!");
 
     // Initialize At Over SPI library.
-    if (!at.begin())
+    if (!wifi.init())
     {
         Serial.println("ESP32-C3 initializaiton Failed! Code stopped.");
 
@@ -33,27 +33,72 @@ void setup()
     }
     Serial.println("ESP32 Initialization OK!");
 
-    if (!at.modemPing())
+    // Disconnect from all previous connections.
+    wifi.disconnect();
+
+    // Set station mode.
+    if (!wifi.setMode(INKPLATE_WIFI_MODE_STA))
     {
-        Serial.println("Modem Ping Fail!");
-        while (1);
+        Serial.println("WiFi mode set failed!");
+
+        while (1)
+        {
+            delay(100);
+        }
+    }
+
+    Serial.println("WiFi network scan:");
+    // Scan the WiFi networks.
+    int foundNetworks = wifi.scanNetworks();
+    if (foundNetworks != 0)
+    {
+        Serial.print("Found networks: ");
+        Serial.println(foundNetworks, DEC);
+        
+        for (int i = 0; i < foundNetworks; i++)
+        {
+            Serial.print(i + 1, DEC);
+            Serial.print(". RSSI: ");
+            Serial.print(wifi.rssi(i), DEC);
+            Serial.print(' ');
+            Serial.print(wifi.auth(i)?'*':' ');
+            Serial.println(wifi.ssid(i));
+        }
     }
     else
     {
-        Serial.println("Modem Pink OK!");
+        Serial.println("No networks found.");
     }
 
-    if (!at.wifiDisconnect())
+    Serial.println("Connecting to the wifi...");
+    wifi.begin("Soldered", "dasduino");
+    while (!wifi.connected())
     {
-        Serial.println("WiFi disconnect Fail!");
-        while (1);
+        Serial.print('.');
+        delay(1000);
     }
-    else
-    {
-        Serial.println("WiFi disconnected");
-    }
+    Serial.println("connected!");
 
-    while (1);
+    // if (!at.modemPing())
+    // {
+    //     Serial.println("Modem Ping Fail!");
+    //     while (1);
+    // }
+    // else
+    // {
+    //     Serial.println("Modem Pink OK!");
+    // }
+
+    // if (!at.disconnect())
+    // {
+    //     Serial.println("WiFi disconnect Fail!");
+    //     while (1);
+    // }
+    // else
+    // {
+    //     Serial.println("WiFi disconnected");
+    // }
+
     // char rxBuffer[32768];
     // if (!at.sendAtCommand("AT\r\n", rxBuffer, 100ULL))
     // {
@@ -94,7 +139,8 @@ void setup()
     //     Serial.println("AT+CWLAP, response:\r\n");
     //     Serial.println(rxBuffer);
     // }
-    // if (!at.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n", rxBuffer, 10000ULL))
+    // wifi.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n");
+    // if (!wifi.getAtResponse(rxBuffer, sizeof(rxBuffer), 2000ULL))
     // {
     //     Serial.println("AT+CWJAP Fail!");
     // }
