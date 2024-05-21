@@ -4,6 +4,9 @@
 // Flag for the handshake for the ESP32.
 static volatile bool _esp32HandshakePinFlag = false;
 
+// SPI Settings for ESP32.
+static SPISettings _esp32AtSpiSettings(20000000ULL, MSBFIRST, SPI_MODE0);
+
 // ISR for the ESP32 handshake pin. This will be called automatically from the interrupt.
 static void esp32HandshakeISR()
 {
@@ -87,7 +90,7 @@ bool AtSpi::sendAtCommand(char *_atCommand)
 
     // Send the data.
     dataSend(_atCommand, _dataLen);
-
+    
     // Send data end.
     dataSendEnd();
 
@@ -153,13 +156,18 @@ bool AtSpi::modemPing()
     sendAtCommand((char*)esp32AtPingCommand);
 
     // Wait for the response from the modem.
-    if (!getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 10ULL)) return false;
+    if (!getAtResponse((char*)_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
 
     // Check if AT\r\n\r\nOK\r\n\r\n is received.
     if (strcmp((char*)_dataBuffer, esp32AtPingResponse) != 0) return false;
 
     // If everything went ok, return true.
     return true;
+}
+
+bool AtSpi::storeSettingsInNVM(bool _store)
+{
+    // Disable or enable storing data in NVM. By default, storing is disabled.
 }
 
 bool AtSpi::setMode(uint8_t _wifiMode)
@@ -174,7 +182,7 @@ bool AtSpi::setMode(uint8_t _wifiMode)
     sendAtCommand(_dataBuffer);
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 200ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
 
     // Check for the result.
     if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
@@ -198,7 +206,6 @@ bool AtSpi::begin(char *_ssid, char* _pass)
     return true;
 }
 
-
 bool AtSpi::connected()
 {
     // Flush AT Read Request.
@@ -212,7 +219,7 @@ bool AtSpi::connected()
     sendAtCommand(_dataBuffer);
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
 
     // Find start of the response. Return false if failed.
     char *_responseStart = strstr(_dataBuffer, "+CWSTATE:");
@@ -231,7 +238,7 @@ bool AtSpi::disconnect()
     sendAtCommand((char*)esp32AtWiFiDisconnectCommand);
 
     // Wait for the response from the modem.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
 
     // Check if the proper response arrived from the modem.
     if (strcmp(_dataBuffer, esp32AtWiFiDisconnectresponse) != 0) return false;
@@ -246,7 +253,7 @@ int AtSpi::scanNetworks()
 
     // First the modem will echo back AT Command and do the disconnect.
     // If this does not happen, sometinhg is wrong, return error.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50UL)) return 0;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20UL)) return 0;
 
     // Now wait for about 3 seconds for the WiFi scan to complete.
     // If failed for some reason, return error.
@@ -291,6 +298,118 @@ int AtSpi::rssi(int _ssidNumber)
     // If parsing is successfull, return RSSI.
     return _lastUsedSsidData.rssi;
 }
+
+IPAddress AtSpi::localIP()
+{
+    return ipAddressParse("ip");
+}
+
+IPAddress AtSpi::gatewayIP()
+{
+    return ipAddressParse("gateway");
+}
+
+IPAddress AtSpi::subnetMask()
+{
+    return ipAddressParse("netmask");
+}
+
+IPAddress AtSpi::dns(uint8_t i)
+{
+    // Filter out the selected DNS. It can only be three DNS IP Addreses.
+    if (i > 2) return INADDR_NONE;
+
+    // DNS IP addresses array.
+    int _dnsIpAddresses[3][4];
+    // Flag if the static or dynamic IP is used on ESP32.
+    int _dhcpFlag = 0;
+
+    // Issue a AT Command for DNS. Return invalid IP address if failed.
+    if (!sendAtCommand((char*)esp32AtGetDns)) return INADDR_NONE;
+
+    // Wait for the response. If timed out, return invalid IP address.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return INADDR_NONE;
+
+    // Try to parse the data.
+    char *_responseStart = strstr(_dataBuffer, "+CIPDNS:");
+    
+    // If not found, return invalid IP Address.
+    if (_responseStart == NULL) INADDR_NONE;
+
+    // Parse it!
+    int _res = sscanf(_responseStart, "+CIPDNS:%d,\"%d.%d.%d.%d\",\"%d.%d.%d.%d\",\"%d.%d.%d.%d\"", &_dhcpFlag,
+    &_dnsIpAddresses[0][0], &_dnsIpAddresses[0][1], &_dnsIpAddresses[0][2], &_dnsIpAddresses[0][3], 
+    &_dnsIpAddresses[1][0], &_dnsIpAddresses[1][1], &_dnsIpAddresses[1][2], &_dnsIpAddresses[1][3], 
+    &_dnsIpAddresses[2][0], &_dnsIpAddresses[2][1], &_dnsIpAddresses[2][2], &_dnsIpAddresses[2][3]);
+
+    // Check if all is parsed correctly. If not, return invalid IP Address.
+    if (_res != 13) return INADDR_NONE;
+
+    // Return wanted DNS.
+    return IPAddress(_dnsIpAddresses[i][0], _dnsIpAddresses[i][1], _dnsIpAddresses[i][2], _dnsIpAddresses[i][3]);
+}
+
+char* AtSpi::macAddress()
+{
+    // Send AT Command for getting AT Command from the module.
+    if (!sendAtCommand((char*)esp32AtWiFiGetMac)) return _invalidMac;
+
+    // Wait for the response from the modem.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return _invalidMac;
+
+    // Try to parse it.
+    char *_responseStart = strstr(_dataBuffer, "+CIPAPMAC:");
+
+    // If proper response is not found, return with invalid MAC address.
+    if (_responseStart == NULL) return _invalidMac;
+
+    // Get the MAC address from the response.
+    int _res = sscanf(_responseStart, "+CIPAPMAC:%[^\r\n]", _esp32MacAddress);
+
+    // If parsing failed, return invalid MAC address.
+    if (!_res) return _invalidMac;
+
+    // Return parsed MAC address.
+    return _esp32MacAddress;
+}
+
+void AtSpi::macAddress(char _mac)
+{
+    
+}
+
+bool AtSpi::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2)
+{
+    // First get the current settings since not all of above must be included.
+    if (_staticIP == INADDR_NONE)
+    {
+        _staticIP = ipAddressParse("ip");
+    }
+
+    if (_gateway == INADDR_NONE)
+    {
+        _gateway = ipAddressParse("gateway");
+    }
+
+    if (_subnet == INADDR_NONE)
+    {
+        _subnet = ipAddressParse("netmask");
+    }
+
+    if (_dns1 == INADDR_NONE)
+    {
+        _dns1 = dns(0);
+    }
+
+    if (_dns1 == INADDR_NONE)
+    {
+        _dns1 = dns(1);
+    }
+
+    // Now send modified data.
+    
+}
+
 
 bool AtSpi::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
 {
@@ -376,12 +495,35 @@ void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiData
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
 
     // Send everything, but the data.
-    SPI.beginTransaction(SPISettings(20000000ULL, MSBFIRST, SPI_MODE0));
+    SPI.beginTransaction(_esp32AtSpiSettings);
     SPI.transfer(_spiPacket->cmd);
     SPI.transfer(_spiPacket->addr);
     SPI.transfer(_spiPacket->dummy);
     
     SPI.transfer(_spiPacket->data, _spiDataLen);
+    SPI.endTransaction();
+
+    // Disable ESP32 SPI lines by pulling CS pin to high.
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
+}
+
+void AtSpi::sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
+{
+    // Get the SPI STM32 HAL Typedef Handle.
+    SPI_HandleTypeDef *_spiHandle = SPI.getHandle();
+
+    // Pack ESP32 SPI Packer Header data.
+    uint8_t _esp32SpiHeader[] = {_spiPacket->cmd, _spiPacket->addr, _spiPacket->dummy};
+
+    // Activate ESP32 SPI lines by pulling CS pin to low.
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
+
+    // Send everything, but the data.
+    SPI.beginTransaction(_esp32AtSpiSettings);
+    HAL_SPI_Transmit(_spiHandle, _esp32SpiHeader, sizeof(_esp32SpiHeader) / sizeof(uint8_t), HAL_MAX_DELAY);
+    
+    // Send data.
+    HAL_SPI_Transmit(_spiHandle, _spiPacket->data, _spiDataLen, HAL_MAX_DELAY);
     SPI.endTransaction();
 
     // Disable ESP32 SPI lines by pulling CS pin to high.
@@ -417,7 +559,7 @@ bool AtSpi::dataSend(char *_dataBuffer, uint32_t _len)
         uint16_t _chunkSize = _chunks != 0?INKPLATE_ESP32_SPI_MAX_MESAGE_DATA_BUFFER:_lastChunk;
 
         // Transfer the data!
-        transferSpiPacket(&_spiDataSend, _chunkSize);
+        sendSpiPacket(&_spiDataSend, _chunkSize);
 
         // Update the address position.
         _dataPacketAddrOffset+= _chunkSize;
@@ -429,7 +571,7 @@ bool AtSpi::dataSend(char *_dataBuffer, uint32_t _len)
     }
 
     // Write the last one chunk (or the only one if the _len < 4092).
-    transferSpiPacket(&_spiDataSend, _lastChunk);
+    sendSpiPacket(&_spiDataSend, _lastChunk);
 
     // Return true for success.
     return true;
@@ -601,4 +743,37 @@ bool AtSpi::parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumbe
 
     // Return true as success.
     return true;
+}
+
+IPAddress AtSpi::ipAddressParse(char *_ipAddressType)
+{
+    // Array for IP Address. For some reason, STM32 can't parse %hhu so int and %d must be used.
+    int _ipAddress[4];
+
+    // String for filtering IP Adresses from the response.
+    char _ipAddressTypeString[30];
+    char _ipAddressTypeStringShort[20];
+    sprintf(_ipAddressTypeString, "+CIPSTA:%s:\"%%d.%%d.%%d.%%d\"", _ipAddressType);
+    sprintf(_ipAddressTypeStringShort, "+CIPSTA:%s:", _ipAddressType);
+
+    // Send the AT Commands for the current IP address.
+    sendAtCommand((char*)esp32AtWiFiGetIP);
+
+    // Wait for the response from the modem. If there is no response, return invalid IP address.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL)) return INADDR_NONE;
+
+    // Try to parse IP Address.
+    char *_ipAddressStart = strstr(_dataBuffer, _ipAddressTypeStringShort);
+
+    // If could not find the start, return invalid IP address.
+    if (_ipAddressStart == NULL) return INADDR_NONE;
+
+    // Get the IP Address from the response.
+    int _res = sscanf(_ipAddressStart, _ipAddressTypeString, &_ipAddress[0], &_ipAddress[1], &_ipAddress[2], &_ipAddress[3]);
+
+    // If can't find 4 bytes, return invalid IP Address.
+    if (_res != 4) return INADDR_NONE;
+
+    // Return the IP Address.
+    return IPAddress(_ipAddress[0], _ipAddress[1], _ipAddress[2], _ipAddress[3]);
 }

@@ -5,6 +5,9 @@
 // Add main Arduino header file.
 #include <Arduino.h>
 
+// include Arduino Library for the IP Adresses.
+#include <IPAddress.h>
+
 // Include Arduino SPI library.
 #include <SPI.h>
 
@@ -35,6 +38,7 @@ class AtSpi
         bool sendAtCommand(char *_atCommand);
         bool getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
         bool modemPing();
+        bool storeSettingsInNVM(bool _store);
         bool setMode(uint8_t _wifiMode);
         bool begin(char *_ssid, char* _pass);
         bool connected();
@@ -43,7 +47,13 @@ class AtSpi
         char* ssid(int _ssidNumber);
         bool auth(int _ssidNumber);
         int rssi(int _ssidNumber);
-        char* getIP();
+        IPAddress localIP();
+        IPAddress gatewayIP();
+        IPAddress subnetMask();
+        IPAddress dns(uint8_t i);
+        char* macAddress();
+        void macAddress(char _mac);
+        bool config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2);
 
     private:
 
@@ -56,16 +66,15 @@ class AtSpi
         bool dataRead(char *_dataBuffer, uint16_t _len);
         bool dataReadEnd();
         bool dataSendRequest(uint16_t _len, uint8_t _seqNumber);
-
-        bool readResponse(uint8_t *_buffer, uint32_t _bufferSize);
-
         void transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiPacketLen);
+        void sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen);
         // End of ESP32 SPI Communication Protocol methods.
 
         // Modem related methods.
         bool isModemReady();
         bool wiFiModemInit(bool _status);
         bool parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumber, struct spiAtWiFiScanTypedef *_scanData);
+        IPAddress ipAddressParse(char *_ipAddressType);
 
         // Data buffer for the ESP32 SPI commands.
         char _dataBuffer[8192];
@@ -75,6 +84,9 @@ class AtSpi
         uint8_t _foundWiFiAp = 0;
         int8_t _lastUsedSsid = -1;
         struct spiAtWiFiScanTypedef _lastUsedSsidData;
+        char _invalidMac[18] = {"00:00:00:00:00:00"};
+        // Array for storing parsed MAC address.
+        char _esp32MacAddress[19];
 };
 
 #endif

@@ -33,6 +33,9 @@ void setup()
     }
     Serial.println("ESP32 Initialization OK!");
 
+    Serial.print("ESP32 MAC Address: ");
+    Serial.println(wifi.macAddress());
+
     // Disconnect from all previous connections.
     wifi.disconnect();
 
@@ -70,7 +73,7 @@ void setup()
         Serial.println("No networks found.");
     }
 
-    Serial.println("Connecting to the wifi...");
+    Serial.print("Connecting to the wifi...");
     wifi.begin("Soldered", "dasduino");
     while (!wifi.connected())
     {
@@ -78,6 +81,25 @@ void setup()
         delay(1000);
     }
     Serial.println("connected!");
+
+    Serial.print("Local IP: ");
+    Serial.println(wifi.localIP());
+
+    Serial.print("Gateway: ");
+    Serial.println(wifi.gatewayIP());
+
+    Serial.print("Subnet mask: ");
+    Serial.println(wifi.subnetMask());
+
+    for (int i = 0; i < 3; i++)
+    {
+        Serial.print("DNS ");
+        Serial.print(i, DEC);
+        Serial.print(": ");
+        Serial.println(wifi.dns(i));
+    }
+
+    //wifi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
 
     // if (!at.modemPing())
     // {
