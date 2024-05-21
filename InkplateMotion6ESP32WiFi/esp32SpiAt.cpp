@@ -46,31 +46,49 @@ bool AtSpi::init()
     // Set ESP32 power switch pin.
     pinMode(INKPLATE_ESP32_PWR_SWITCH_PIN, OUTPUT);
 
-    // Enable the power to the ESP32.
-    digitalWrite(INKPLATE_ESP32_PWR_SWITCH_PIN, HIGH);
-
-    // Wait a little bit for the ESP32 to boot up.
-    delay(100);
-
-    // Wait for the EPS32 to be ready. It will send a handshake to notify master
-    // To read the data - "\r\nready\r\n" packet. Since the handshake pin pulled high
-    // with the external resistor, we need to wait for the handshake pin to go low first,
-    // then wait for the proper handshake event.
-    if (!isModemReady()) return false;
-
-    // Try to ping modem. Return fail if failed.
-    if (!modemPing()) return false;
-
-    // Initialize WiFi radio.
-    if (!wiFiModemInit(true)) return false;
+    if (!power(true)) return false;
 
     // If everything went ok, return true.
     return true;
 }
 
-void AtSpi::power(bool _en)
+bool AtSpi::power(bool _en)
 {
+    if (_en)
+    {
+        // Enable the power to the ESP32.
+        digitalWrite(INKPLATE_ESP32_PWR_SWITCH_PIN, HIGH);
 
+        // Wait a little bit for the ESP32 to boot up.
+        delay(100);
+
+        // Wait for the EPS32 to be ready. It will send a handshake to notify master
+        // To read the data - "\r\nready\r\n" packet. Since the handshake pin pulled high
+        // with the external resistor, we need to wait for the handshake pin to go low first,
+        // then wait for the proper handshake event.
+        if (!isModemReady()) return false;
+
+        // Try to ping modem. Return fail if failed.
+        if (!modemPing()) return false;
+
+        // Initialize WiFi radio.
+        if (!wiFiModemInit(true)) return false;
+
+        // Disable stroing data in NVM. Return false if failed.
+        if (!storeSettingsInNVM(false)) return false;
+    }
+    else
+    {
+        // Disable the power to the modem.
+        // Disable the power to the ESP32.
+        digitalWrite(INKPLATE_ESP32_PWR_SWITCH_PIN, HIGH);
+
+        // Wait a little bit for the ESP32 to power down.
+        delay(100);
+    }
+
+    // Everything went ok? Return true.
+    return true;
 }
 
 bool AtSpi::sendAtCommand(char *_atCommand)
@@ -167,7 +185,23 @@ bool AtSpi::modemPing()
 
 bool AtSpi::storeSettingsInNVM(bool _store)
 {
-    // Disable or enable storing data in NVM. By default, storing is disabled.
+    // Disable or enable storing data in NVM. By default, storing is enabled, but at the ESP
+    // start up is disabled.
+
+    // Make a AT Command depending on the choice of storing settings in NVM.
+    sprintf(_dataBuffer, "AT+SYSSTORE=%d\r\n", _store?1:0);
+
+    // Send AT Command. Return false if failed.
+    if (!sendAtCommand(_dataBuffer)) return false;
+
+    // Wait for the response. Return false if failed.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return false;
+
+    // Check for the respose. Try to find "\r\nOK\r\n". Return false if find failed.
+    if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
+
+    // Otherwise return true.
+    return true;
 }
 
 bool AtSpi::setMode(uint8_t _wifiMode)
@@ -373,9 +407,22 @@ char* AtSpi::macAddress()
     return _esp32MacAddress;
 }
 
-void AtSpi::macAddress(char _mac)
+bool AtSpi::macAddress(char *_mac)
 {
-    
+    // Create a string for the new MAC address.
+    sprintf(_dataBuffer, "AT+CIPAPMAC=\"%s\"\r\n", _mac);
+
+    // Send AT Command. Return false if failed.
+    if (!sendAtCommand(_dataBuffer)) return false;
+
+    // Wait for the response.
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return false;
+
+    // Get the response. Try to find \r\n\OK\r\n. Return false if failed.
+    if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
+
+    // Otherwise return true.
+    return true;
 }
 
 bool AtSpi::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2)

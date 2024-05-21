@@ -33,16 +33,39 @@ void setup()
     }
     Serial.println("ESP32 Initialization OK!");
 
-    Serial.print("ESP32 MAC Address: ");
-    Serial.println(wifi.macAddress());
-
     // Disconnect from all previous connections.
     wifi.disconnect();
 
-    // Set station mode.
+    // Set to Access Point to change the MAC Address.
+    if (!wifi.setMode(INKPLATE_WIFI_MODE_AP))
+    {
+        Serial.println("AP mode failed!");
+
+        while (1)
+        {
+            delay(100);
+        }
+    }
+
+    // Print out ESP32 MAC address.
+    Serial.print("ESP32 MAC Address: ");
+    Serial.println(wifi.macAddress());
+
+    // Change MAC address to something else.
+    if(!wifi.macAddress("1a:bb:cc:01:23:45"))
+    {
+        Serial.println("MAC address Change failed!");
+    }
+    else
+    {
+        Serial.print("New MAC address: ");
+        Serial.println(wifi.macAddress());
+    }
+
+    // Set it back to the station mode.
     if (!wifi.setMode(INKPLATE_WIFI_MODE_STA))
     {
-        Serial.println("WiFi mode set failed!");
+        Serial.println("STA mode failed!");
 
         while (1)
         {

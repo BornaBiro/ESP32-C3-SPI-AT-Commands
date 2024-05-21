@@ -34,7 +34,7 @@ class AtSpi
     public:
         AtSpi();
         bool init();
-        void power(bool _en);
+        bool power(bool _en);
         bool sendAtCommand(char *_atCommand);
         bool getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
         bool modemPing();
@@ -52,7 +52,7 @@ class AtSpi
         IPAddress subnetMask();
         IPAddress dns(uint8_t i);
         char* macAddress();
-        void macAddress(char _mac);
+        bool macAddress(char *_mac);
         bool config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2);
 
     private:
