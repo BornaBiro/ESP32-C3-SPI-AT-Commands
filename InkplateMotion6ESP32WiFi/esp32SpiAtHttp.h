@@ -16,14 +16,14 @@ class WiFiClient
         WiFiClient();
         bool connect(const char* _url);
         int available();
-        void read(char *_buffer, uint16_t _len);
+        uint16_t read(char *_buffer, uint16_t _len);
         char read();
 
         private:
         int cleanHttpGetResponse(char *_buffer, uint16_t *_len);
 
         uint16_t _bufferLen = 0;
-        uint16_t _offset = 0;
+        char * _currentPos = NULL;
         char *_dataBuffer = NULL;
 };
 

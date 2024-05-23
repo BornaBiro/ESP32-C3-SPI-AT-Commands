@@ -185,6 +185,9 @@ bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsign
     // If the timeout occured, return false.
     if (!_esp32HandshakePinFlag) return false;
 
+    // Clear handshake pin.
+    _esp32HandshakePinFlag = false;
+
     // Otherwise read the data.
     // Check the slave status, if must be INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE
     uint8_t _slaveStatus = requestSlaveStatus(&_responseLen);
@@ -268,6 +271,9 @@ bool WiFiClass::setMode(uint8_t _wifiMode)
 
     // Check for the result.
     if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
+
+    // Now disconnect from the network.
+    disconnect();
 
     // Otherwise, return ok.
     return true;

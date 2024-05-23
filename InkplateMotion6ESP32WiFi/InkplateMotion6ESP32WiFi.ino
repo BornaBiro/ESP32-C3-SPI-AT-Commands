@@ -18,25 +18,37 @@ void setup()
     // Print an welcome message (to know if the Inkplate board and STM32 are alive).
     Serial.println("Inkplate Motion Code Started!");
 
+    // Initialize the Inkplate Motion Library.
+    inkplate.begin(INKPLATE_1BW);
+
+    // Clear the screen.
+    inkplate.display();
+
+    // Set the text.
+    inkplate.setCursor(0, 0);
+    inkplate.setTextSize(1);
+    inkplate.setTextColor(BLACK, WHITE);
+    inkplate.setTextWrap(true);
+
     // Initialize At Over SPI library.
     if (!WiFi.init())
     {
-        Serial.println("ESP32-C3 initializaiton Failed! Code stopped.");
+        inkplate.println("ESP32-C3 initializaiton Failed! Code stopped.");
+        inkplate.partialUpdate(true);
 
         while (1)
         {
             delay(100);
         }
     }
-    Serial.println("ESP32 Initialization OK!");
-
-    // Disconnect from all previous connections.
-    WiFi.disconnect();
+    inkplate.println("ESP32 Initialization OK!");
+    inkplate.partialUpdate(true);
 
     // Set to Access Point to change the MAC Address.
     if (!WiFi.setMode(INKPLATE_WIFI_MODE_AP))
     {
-        Serial.println("AP mode failed!");
+        inkplate.println("AP mode failed!");
+        inkplate.partialUpdate(true);
 
         while (1)
         {
@@ -45,24 +57,28 @@ void setup()
     }
 
     // Print out ESP32 MAC address.
-    Serial.print("ESP32 MAC Address: ");
-    Serial.println(WiFi.macAddress());
+    inkplate.print("ESP32 MAC Address: ");
+    inkplate.println(WiFi.macAddress());
+    inkplate.partialUpdate(true);
 
     // Change MAC address to something else.
     if(!WiFi.macAddress("1a:bb:cc:01:23:45"))
     {
-        Serial.println("MAC address Change failed!");
+        inkplate.println("MAC address Change failed!");
+        inkplate.partialUpdate(true);
     }
     else
     {
-        Serial.print("New MAC address: ");
-        Serial.println(WiFi.macAddress());
+        inkplate.print("New MAC address: ");
+        inkplate.println(WiFi.macAddress());
+        inkplate.partialUpdate(true);
     }
 
     // Set it back to the station mode.
     if (!WiFi.setMode(INKPLATE_WIFI_MODE_STA))
     {
-        Serial.println("STA mode failed!");
+        inkplate.println("STA mode failed!");
+        inkplate.partialUpdate(true);
 
         while (1)
         {
@@ -70,164 +86,104 @@ void setup()
         }
     }
 
-    Serial.println("WiFi network scan:");
+    inkplate.println("WiFi network scan:");
+    inkplate.partialUpdate(true);
     // Scan the WiFi networks.
     int foundNetworks = WiFi.scanNetworks();
     if (foundNetworks != 0)
     {
-        Serial.print("Found networks: ");
-        Serial.println(foundNetworks, DEC);
+        inkplate.print("Found networks: ");
+        inkplate.println(foundNetworks, DEC);
         
         for (int i = 0; i < foundNetworks; i++)
         {
-            Serial.print(i + 1, DEC);
-            Serial.print(". RSSI: ");
-            Serial.print(WiFi.rssi(i), DEC);
-            Serial.print(' ');
-            Serial.print(WiFi.auth(i)?'*':' ');
-            Serial.println(WiFi.ssid(i));
+            inkplate.print(i + 1, DEC);
+            inkplate.print(". RSSI: ");
+            inkplate.print(WiFi.rssi(i), DEC);
+            inkplate.print(' ');
+            inkplate.print(WiFi.auth(i)?'*':' ');
+            inkplate.println(WiFi.ssid(i));
         }
     }
     else
     {
-        Serial.println("No networks found.");
+        inkplate.println("No networks found.");
     }
+    inkplate.partialUpdate(true);
 
-    Serial.print("Connecting to the wifi...");
+    inkplate.print("Connecting to the wifi...");
+    inkplate.partialUpdate(true);
     WiFi.begin("Soldered", "dasduino");
     while (!WiFi.connected())
     {
-        Serial.print('.');
+        inkplate.print('.');
+        inkplate.partialUpdate(true);
         delay(1000);
     }
-    Serial.println("connected!");
+    inkplate.println("connected!");
+    inkplate.partialUpdate(true);
 
-    Serial.print("Local IP: ");
-    Serial.println(WiFi.localIP());
+    inkplate.print("Local IP: ");
+    inkplate.println(WiFi.localIP());
 
-    Serial.print("Gateway: ");
-    Serial.println(WiFi.gatewayIP());
+    inkplate.print("Gateway: ");
+    inkplate.println(WiFi.gatewayIP());
 
-    Serial.print("Subnet mask: ");
-    Serial.println(WiFi.subnetMask());
+    inkplate.print("Subnet mask: ");
+    inkplate.println(WiFi.subnetMask());
+    inkplate.partialUpdate(true);
 
     for (int i = 0; i < 3; i++)
     {
-        Serial.print("DNS ");
-        Serial.print(i, DEC);
-        Serial.print(": ");
-        Serial.println(WiFi.dns(i));
+        inkplate.print("DNS ");
+        inkplate.print(i, DEC);
+        inkplate.print(": ");
+        inkplate.println(WiFi.dns(i));
     }
+    inkplate.partialUpdate(true);
+
+    inkplate.println("Trying to open a text file from the internet...");
+    inkplate.partialUpdate(true);
 
     WiFiClient myClient;
-    //myClient.connect("http://example.com");
-    //myClient.connect("http://meteo.hr");
+    uint32_t totalSize = 0;
+
     if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
     {
-        Serial.println("Connected!");
+        inkplate.println("Connected!");
+        inkplate.partialUpdate(true);
+        delay(1000);
+        inkplate.clearDisplay();
+        inkplate.setCursor(0, 0);
+        inkplate.display();
+
         while (myClient.available())
         {
             if (myClient.available() > 0)
             {
-                //char myBuffer[2000];
-                //myClient.read(myBuffer, sizeof(myBuffer));
-                //for (int i = 0; i < 64; i++)
-                //{
-                //    Serial.print(myBuffer);
-                //}
-               // Serial.flush();
-               Serial.print(myClient.read());
+                char myBuffer[2000];
+                int n = myClient.read(myBuffer, sizeof(myBuffer));
+                totalSize += n;
+
+                myBuffer[n] = 0;
+                
+                inkplate.print(myBuffer);
             }
         }
+        inkplate.partialUpdate(true);
+    }
+    else
+    {
+        inkplate.println("Failed to get the file");
+        inkplate.partialUpdate(true);
     }
 
-    Serial.println("\n\n\n\nDone!");
+    Serial.print("\n\n\n\nTotal size in bytes: ");
+    Serial.println(totalSize, DEC);
+
+    Serial.println("Done!");
 
     //wifi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
-
-    // if (!at.modemPing())
-    // {
-    //     Serial.println("Modem Ping Fail!");
-    //     while (1);
-    // }
-    // else
-    // {
-    //     Serial.println("Modem Pink OK!");
-    // }
-
-    // if (!at.disconnect())
-    // {
-    //     Serial.println("WiFi disconnect Fail!");
-    //     while (1);
-    // }
-    // else
-    // {
-    //     Serial.println("WiFi disconnected");
-    // }
-
-    // char rxBuffer[32768];
-    // if (!at.sendAtCommand("AT\r\n", rxBuffer, 100ULL))
-    // {
-    //     Serial.println("AT Ping Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT Ping Ok, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-
-    // if (!at.sendAtCommand("AT+CWINIT=1\r\n", rxBuffer, 100ULL))
-    // {
-    //     Serial.println("AT+CWINIT Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT+CWINIT, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-
-    // if (!at.sendAtCommand("AT+CWMODE=1\r\n", rxBuffer, 100ULL))
-    // {
-    //     Serial.println("AT+CWMODE Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT+CWMODE, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-
-    // if (!at.sendAtCommand("AT+CWLAP\r\n", rxBuffer, 10000ULL))
-    // {
-    //     Serial.println("AT+CWLAP Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT+CWLAP, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-    // wifi.sendAtCommand("AT+CWJAP=\"Soldered\",\"dasduino\"\r\n");
-    // if (!wifi.getAtResponse(rxBuffer, sizeof(rxBuffer), 2000ULL))
-    // {
-    //     Serial.println("AT+CWJAP Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT+CWJAP, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-    // if (!at.sendAtCommand("AT+HTTPCGET=\"https://www.timeapi.io/api/TimeZone/AvailableTimeZones\"\r\n", rxBuffer, 10000ULL))
-    // {
-    //     Serial.println("AT+HTTPCGET Fail!");
-    // }
-    // else
-    // {
-    //     Serial.println("AT+HTTPCGET, response:\r\n");
-    //     Serial.println(rxBuffer);
-    // }
-
-
-    // Initialize the Inkplate Motion Library.
-    //inkplate.begin(INKPLATE_1BW);
 }
 
 void loop()

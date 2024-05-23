@@ -10,7 +10,6 @@ bool WiFiClient::connect(const char* _url)
 {
     // Set data len to zero.
     _bufferLen = 0;
-    _offset = 0;
 
     // Get the RX Buffer Data Buffer pointer from the WiFi library.
     _dataBuffer = WiFi.getDataBuffer();
@@ -22,27 +21,15 @@ bool WiFiClient::connect(const char* _url)
     // Wait for the response. Echo from sent command.
     if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 10ULL)) return false;
 
-    Serial.println("[connect] echo ok");
-
     // Wait for the first data chunk. If timeout occured, return false.
     if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 30000ULL)) return false;
-
-    Serial.println("[connect] first chunk ok");
-
 
     // Check for the "ERROR". If error is found, return false.
     if (strstr(_dataBuffer, esp32AtCmdResponseError) != NULL) return false;
 
-    Serial.println("[connect] no error respose found");
-            //     for (int i = 0 ; i < 100; i++)
-            // {
-            //     Serial.print(_dataBuffer[i]);
-            // }
-
     if (!cleanHttpGetResponse(_dataBuffer, &_bufferLen)) return false;
 
-    Serial.print("[connect] http clean ok, data len: ");
-    Serial.println(_bufferLen, DEC);
+    _currentPos = _dataBuffer;
 
     return true;
 }
@@ -51,7 +38,7 @@ int WiFiClient::available()
 {
     if (_bufferLen == 0)
     {
-        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 100ULL))
+        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 1000ULL))
         {
             if (strstr(_dataBuffer, esp32AtCmdResponseError) == NULL)
             {
@@ -59,33 +46,25 @@ int WiFiClient::available()
                 if (cleanHttpGetResponse(_dataBuffer, &_len))
                 {
                     _bufferLen = _len;
-                    _offset = 0;
-                }
-                else
-                {
-                    //Serial.println("Failed to clean http response");
+                    _currentPos = _dataBuffer;
                 }
             }
-            else
-            {
-                //Serial.println("Some how the response is error!?!?!?!?");
-            }
-        }
-        else
-        {
-            //Serial.println("No new data?!?!?!");
         }
     }
 
     return _bufferLen;
 }
 
-void WiFiClient::read(char *_buffer, uint16_t _len)
+uint16_t WiFiClient::read(char *_buffer, uint16_t _len)
 {
+    if (_currentPos == NULL) return 0;
+
     if (_len > _bufferLen) _len = _bufferLen;
-    memcpy(_buffer, _dataBuffer + _offset, _len);
+    memcpy(_buffer, _currentPos, _len);
     _bufferLen -= _len;
-    _offset+=_len;
+    _currentPos += _len;
+
+    return _len;
 }
 
 char WiFiClient::read()
@@ -93,8 +72,7 @@ char WiFiClient::read()
     char _c = 0;
     if (_bufferLen)
     {
-        _c = *(_dataBuffer + _offset);
-        _offset++;
+        _c = *(_currentPos++);
         _bufferLen--;
     }
 
