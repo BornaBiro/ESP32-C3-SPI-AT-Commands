@@ -10,9 +10,6 @@
 // Create an Inkplate Motion Object.
 Inkplate inkplate;
 
-// Create an object for the AT commands over SPI commands.
-AtSpi wifi;
-
 void setup()
 {
     // Setup a Serial communication for debug at 115200 bauds.
@@ -22,7 +19,7 @@ void setup()
     Serial.println("Inkplate Motion Code Started!");
 
     // Initialize At Over SPI library.
-    if (!wifi.init())
+    if (!WiFi.init())
     {
         Serial.println("ESP32-C3 initializaiton Failed! Code stopped.");
 
@@ -34,10 +31,10 @@ void setup()
     Serial.println("ESP32 Initialization OK!");
 
     // Disconnect from all previous connections.
-    wifi.disconnect();
+    WiFi.disconnect();
 
     // Set to Access Point to change the MAC Address.
-    if (!wifi.setMode(INKPLATE_WIFI_MODE_AP))
+    if (!WiFi.setMode(INKPLATE_WIFI_MODE_AP))
     {
         Serial.println("AP mode failed!");
 
@@ -49,21 +46,21 @@ void setup()
 
     // Print out ESP32 MAC address.
     Serial.print("ESP32 MAC Address: ");
-    Serial.println(wifi.macAddress());
+    Serial.println(WiFi.macAddress());
 
     // Change MAC address to something else.
-    if(!wifi.macAddress("1a:bb:cc:01:23:45"))
+    if(!WiFi.macAddress("1a:bb:cc:01:23:45"))
     {
         Serial.println("MAC address Change failed!");
     }
     else
     {
         Serial.print("New MAC address: ");
-        Serial.println(wifi.macAddress());
+        Serial.println(WiFi.macAddress());
     }
 
     // Set it back to the station mode.
-    if (!wifi.setMode(INKPLATE_WIFI_MODE_STA))
+    if (!WiFi.setMode(INKPLATE_WIFI_MODE_STA))
     {
         Serial.println("STA mode failed!");
 
@@ -75,7 +72,7 @@ void setup()
 
     Serial.println("WiFi network scan:");
     // Scan the WiFi networks.
-    int foundNetworks = wifi.scanNetworks();
+    int foundNetworks = WiFi.scanNetworks();
     if (foundNetworks != 0)
     {
         Serial.print("Found networks: ");
@@ -85,10 +82,10 @@ void setup()
         {
             Serial.print(i + 1, DEC);
             Serial.print(". RSSI: ");
-            Serial.print(wifi.rssi(i), DEC);
+            Serial.print(WiFi.rssi(i), DEC);
             Serial.print(' ');
-            Serial.print(wifi.auth(i)?'*':' ');
-            Serial.println(wifi.ssid(i));
+            Serial.print(WiFi.auth(i)?'*':' ');
+            Serial.println(WiFi.ssid(i));
         }
     }
     else
@@ -97,8 +94,8 @@ void setup()
     }
 
     Serial.print("Connecting to the wifi...");
-    wifi.begin("Soldered", "dasduino");
-    while (!wifi.connected())
+    WiFi.begin("Soldered", "dasduino");
+    while (!WiFi.connected())
     {
         Serial.print('.');
         delay(1000);
@@ -106,21 +103,45 @@ void setup()
     Serial.println("connected!");
 
     Serial.print("Local IP: ");
-    Serial.println(wifi.localIP());
+    Serial.println(WiFi.localIP());
 
     Serial.print("Gateway: ");
-    Serial.println(wifi.gatewayIP());
+    Serial.println(WiFi.gatewayIP());
 
     Serial.print("Subnet mask: ");
-    Serial.println(wifi.subnetMask());
+    Serial.println(WiFi.subnetMask());
 
     for (int i = 0; i < 3; i++)
     {
         Serial.print("DNS ");
         Serial.print(i, DEC);
         Serial.print(": ");
-        Serial.println(wifi.dns(i));
+        Serial.println(WiFi.dns(i));
     }
+
+    WiFiClient myClient;
+    //myClient.connect("http://example.com");
+    //myClient.connect("http://meteo.hr");
+    if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
+    {
+        Serial.println("Connected!");
+        while (myClient.available())
+        {
+            if (myClient.available() > 0)
+            {
+                //char myBuffer[2000];
+                //myClient.read(myBuffer, sizeof(myBuffer));
+                //for (int i = 0; i < 64; i++)
+                //{
+                //    Serial.print(myBuffer);
+                //}
+               // Serial.flush();
+               Serial.print(myClient.read());
+            }
+        }
+    }
+
+    Serial.println("\n\n\n\nDone!");
 
     //wifi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
 

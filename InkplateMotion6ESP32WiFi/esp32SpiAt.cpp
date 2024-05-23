@@ -14,12 +14,12 @@ static void esp32HandshakeISR()
 }
 
 // Define a constructor.
-AtSpi::AtSpi()
+WiFiClass::WiFiClass()
 {
     // Empty...for now!
 }
 
-bool AtSpi::init()
+bool WiFiClass::init()
 {
     // Set the hardware level stuff first.
     
@@ -52,7 +52,7 @@ bool AtSpi::init()
     return true;
 }
 
-bool AtSpi::power(bool _en)
+bool WiFiClass::power(bool _en)
 {
     if (_en)
     {
@@ -91,7 +91,7 @@ bool AtSpi::power(bool _en)
     return true;
 }
 
-bool AtSpi::sendAtCommand(char *_atCommand)
+bool WiFiClass::sendAtCommand(char *_atCommand)
 {
     // Get the data size.
     uint16_t _dataLen = strlen(_atCommand);
@@ -115,7 +115,7 @@ bool AtSpi::sendAtCommand(char *_atCommand)
     return true;
 }
 
-bool AtSpi::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
+bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
 {
     // Timeout variable.
     unsigned long _timeoutCounter = 0;
@@ -168,7 +168,49 @@ bool AtSpi::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _t
     return true;
 }
 
-bool AtSpi::modemPing()
+bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
+{
+    // Timeout variable.
+    unsigned long _timeoutCounter = 0;
+
+    // Variable for the response string length.
+    uint16_t _responseLen = 0;
+
+    // Capture the time!
+    _timeoutCounter = millis();
+
+    // Now loop until the timeout occurs
+    while (((unsigned long)(millis() - _timeoutCounter) < _timeout) && (!_esp32HandshakePinFlag));
+
+    // If the timeout occured, return false.
+    if (!_esp32HandshakePinFlag) return false;
+
+    // Otherwise read the data.
+    // Check the slave status, if must be INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE
+    uint8_t _slaveStatus = requestSlaveStatus(&_responseLen);
+
+    // Check the slave status, if must be INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE
+    if (_slaveStatus != INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE) return false;
+
+    // Check if the buffer is large enough for the data.
+    // If not, drop everything.
+    if (_responseLen < _bufferLen)
+    {
+        // Read the data.
+        dataRead(_response, _responseLen);
+    }
+
+    // Send read done.
+    dataReadEnd();
+
+    // Add null-terminating char.
+    _response[_responseLen] = '\0';
+
+    // Evertything went ok? Return true!
+    return true;
+}
+
+bool WiFiClass::modemPing()
 {
     // Send "AT" AT Command for Modem Ping.
     sendAtCommand((char*)esp32AtPingCommand);
@@ -183,7 +225,7 @@ bool AtSpi::modemPing()
     return true;
 }
 
-bool AtSpi::storeSettingsInNVM(bool _store)
+bool WiFiClass::storeSettingsInNVM(bool _store)
 {
     // Disable or enable storing data in NVM. By default, storing is enabled, but at the ESP
     // start up is disabled.
@@ -204,7 +246,13 @@ bool AtSpi::storeSettingsInNVM(bool _store)
     return true;
 }
 
-bool AtSpi::setMode(uint8_t _wifiMode)
+char* WiFiClass::getDataBuffer()
+{
+    // Return the main RX/TX buffer fopr SPI data.
+    return _dataBuffer;
+}
+
+bool WiFiClass::setMode(uint8_t _wifiMode)
 {
     // Check for the proper mode.
     if ((_wifiMode > INKPLATE_WIFI_MODE_STA_AP)) return false;
@@ -225,7 +273,7 @@ bool AtSpi::setMode(uint8_t _wifiMode)
     return true;
 }
 
-bool AtSpi::begin(char *_ssid, char* _pass)
+bool WiFiClass::begin(char *_ssid, char* _pass)
 {
     // Check for user mistake (null-pointer!).
     if ((_ssid == NULL) || (_pass == NULL)) return false;
@@ -240,7 +288,7 @@ bool AtSpi::begin(char *_ssid, char* _pass)
     return true;
 }
 
-bool AtSpi::connected()
+bool WiFiClass::connected()
 {
     // Flush AT Read Request.
     requestSlaveStatus();
@@ -266,7 +314,7 @@ bool AtSpi::connected()
     return (_result == 2)?true:false;
 }
 
-bool AtSpi::disconnect()
+bool WiFiClass::disconnect()
 {
     // Sent AT command for WiFi Disconnect.
     sendAtCommand((char*)esp32AtWiFiDisconnectCommand);
@@ -280,7 +328,7 @@ bool AtSpi::disconnect()
     return true;
 }
 
-int AtSpi::scanNetworks()
+int WiFiClass::scanNetworks()
 {
     // Issue a WiFi Scan command.
     sendAtCommand((char*)esp32AtWiFiScan);
@@ -306,7 +354,7 @@ int AtSpi::scanNetworks()
     return _foundWiFiAp;
 }
 
-char* AtSpi::ssid(int _ssidNumber)
+char* WiFiClass::ssid(int _ssidNumber)
 {
     // Check if the parsing is successfull. If not, return empty string.
     if (!parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData)) return " ";
@@ -315,7 +363,7 @@ char* AtSpi::ssid(int _ssidNumber)
     return _lastUsedSsidData.ssidName;
 }
 
-bool AtSpi::auth(int _ssidNumber)
+bool WiFiClass::auth(int _ssidNumber)
 {
     // Parse the found network data.
     parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData);
@@ -324,7 +372,7 @@ bool AtSpi::auth(int _ssidNumber)
     return _lastUsedSsidData.authType?true:false;
 }
 
-int AtSpi::rssi(int _ssidNumber)
+int WiFiClass::rssi(int _ssidNumber)
 {
     // Parse the found network data.
     parseFoundNetworkData(_ssidNumber, &_lastUsedSsid, &_lastUsedSsidData);
@@ -333,22 +381,22 @@ int AtSpi::rssi(int _ssidNumber)
     return _lastUsedSsidData.rssi;
 }
 
-IPAddress AtSpi::localIP()
+IPAddress WiFiClass::localIP()
 {
     return ipAddressParse("ip");
 }
 
-IPAddress AtSpi::gatewayIP()
+IPAddress WiFiClass::gatewayIP()
 {
     return ipAddressParse("gateway");
 }
 
-IPAddress AtSpi::subnetMask()
+IPAddress WiFiClass::subnetMask()
 {
     return ipAddressParse("netmask");
 }
 
-IPAddress AtSpi::dns(uint8_t i)
+IPAddress WiFiClass::dns(uint8_t i)
 {
     // Filter out the selected DNS. It can only be three DNS IP Addreses.
     if (i > 2) return INADDR_NONE;
@@ -383,7 +431,7 @@ IPAddress AtSpi::dns(uint8_t i)
     return IPAddress(_dnsIpAddresses[i][0], _dnsIpAddresses[i][1], _dnsIpAddresses[i][2], _dnsIpAddresses[i][3]);
 }
 
-char* AtSpi::macAddress()
+char* WiFiClass::macAddress()
 {
     // Send AT Command for getting AT Command from the module.
     if (!sendAtCommand((char*)esp32AtWiFiGetMac)) return _invalidMac;
@@ -407,7 +455,7 @@ char* AtSpi::macAddress()
     return _esp32MacAddress;
 }
 
-bool AtSpi::macAddress(char *_mac)
+bool WiFiClass::macAddress(char *_mac)
 {
     // Create a string for the new MAC address.
     sprintf(_dataBuffer, "AT+CIPAPMAC=\"%s\"\r\n", _mac);
@@ -425,7 +473,7 @@ bool AtSpi::macAddress(char *_mac)
     return true;
 }
 
-bool AtSpi::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2)
+bool WiFiClass::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2)
 {
     // First get the current settings since not all of above must be included.
     if (_staticIP == INADDR_NONE)
@@ -457,8 +505,7 @@ bool AtSpi::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, I
     
 }
 
-
-bool AtSpi::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
+bool WiFiClass::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
 {
     // Variable for the timeout. Also capture the current state.
     unsigned long _timeout = millis();
@@ -486,7 +533,7 @@ bool AtSpi::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
     return true;
 }
 
-bool AtSpi::waitForHandshakePinInt(uint32_t _timeoutValue)
+bool WiFiClass::waitForHandshakePinInt(uint32_t _timeoutValue)
 {
     // First, clear the flag status.
     _esp32HandshakePinFlag = false;
@@ -507,7 +554,7 @@ bool AtSpi::waitForHandshakePinInt(uint32_t _timeoutValue)
     return true;
 }
 
-uint8_t AtSpi::requestSlaveStatus(uint16_t *_len)
+uint8_t WiFiClass::requestSlaveStatus(uint16_t *_len)
 {
     // Make a union/struct for data part of the SPI Command.
     union spiAtCommandsSlaveStatusTypedef _slaveStatus;
@@ -536,8 +583,11 @@ uint8_t AtSpi::requestSlaveStatus(uint16_t *_len)
     return _slaveStatus.elements.status;
 }
 
-void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
+void WiFiClass::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
+    // Get the SPI STM32 HAL Typedef Handle.
+    SPI_HandleTypeDef *_spiHandle = SPI.getHandle();
+
     // Activate ESP32 SPI lines by pulling CS pin to low.
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
 
@@ -547,14 +597,15 @@ void AtSpi::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiData
     SPI.transfer(_spiPacket->addr);
     SPI.transfer(_spiPacket->dummy);
     
-    SPI.transfer(_spiPacket->data, _spiDataLen);
+    //SPI.transfer(_spiPacket->data, _spiDataLen);
+    HAL_SPI_TransmitReceive(_spiHandle, (uint8_t*)_spiPacket->data, (uint8_t*)_spiPacket->data, _spiDataLen, HAL_MAX_DELAY);
     SPI.endTransaction();
 
     // Disable ESP32 SPI lines by pulling CS pin to high.
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
-void AtSpi::sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
+void WiFiClass::sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
     // Get the SPI STM32 HAL Typedef Handle.
     SPI_HandleTypeDef *_spiHandle = SPI.getHandle();
@@ -577,7 +628,7 @@ void AtSpi::sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
-bool AtSpi::dataSend(char *_dataBuffer, uint32_t _len)
+bool WiFiClass::dataSend(char *_dataBuffer, uint32_t _len)
 {
     // Before sending data:
     // 1. Make a request for data send
@@ -624,7 +675,7 @@ bool AtSpi::dataSend(char *_dataBuffer, uint32_t _len)
     return true;
 }
 
-bool AtSpi::dataSendEnd()
+bool WiFiClass::dataSendEnd()
 {
     // Create the structure for the ESP32 SPI.
     // Data field is not used here.
@@ -642,7 +693,7 @@ bool AtSpi::dataSendEnd()
     return true;
 }
 
-bool AtSpi::dataRead(char *_dataBuffer, uint16_t _len)
+bool WiFiClass::dataRead(char *_dataBuffer, uint16_t _len)
 {
     // Before reading the data:
     // 1. Make a request for data read.
@@ -664,7 +715,7 @@ bool AtSpi::dataRead(char *_dataBuffer, uint16_t _len)
     return true;
 }
 
-bool AtSpi::dataReadEnd()
+bool WiFiClass::dataReadEnd()
 {
     // Create the structure for the ESP32 SPI.
     // Data field is not used here.
@@ -682,7 +733,7 @@ bool AtSpi::dataReadEnd()
     return true;
 }
 
-bool AtSpi::dataSendRequest(uint16_t _len, uint8_t _seqNumber)
+bool WiFiClass::dataSendRequest(uint16_t _len, uint8_t _seqNumber)
 {
     // Create the structure for the ESP32 SPI.
     // Data field data info field now (spiAtCommandDataInfoTypedef union).
@@ -711,7 +762,7 @@ bool AtSpi::dataSendRequest(uint16_t _len, uint8_t _seqNumber)
     return _ret;
 }
 
-bool AtSpi::isModemReady()
+bool WiFiClass::isModemReady()
 {
     if (waitForHandshakePinInt(5000ULL))
     {
@@ -753,7 +804,7 @@ bool AtSpi::isModemReady()
     return true;
 }
 
-bool AtSpi::wiFiModemInit(bool _status)
+bool WiFiClass::wiFiModemInit(bool _status)
 {
     // Create a AT Commands String depending on the WiFi Initialization status.
     sprintf(_dataBuffer, "AT+CWINIT=%d\r\n", _status);
@@ -771,7 +822,7 @@ bool AtSpi::wiFiModemInit(bool _status)
     return true;
 }
 
-bool AtSpi::parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumber, struct spiAtWiFiScanTypedef *_scanData)
+bool WiFiClass::parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumber, struct spiAtWiFiScanTypedef *_scanData)
 {
     // Check if the last used SSID number matches current one. If so, do not need to parse anything.
     if (*_lastUsedSsidNumber == _ssidNumber) return true;
@@ -792,7 +843,7 @@ bool AtSpi::parseFoundNetworkData(int8_t _ssidNumber, int8_t *_lastUsedSsidNumbe
     return true;
 }
 
-IPAddress AtSpi::ipAddressParse(char *_ipAddressType)
+IPAddress WiFiClass::ipAddressParse(char *_ipAddressType)
 {
     // Array for IP Address. For some reason, STM32 can't parse %hhu so int and %d must be used.
     int _ipAddress[4];
@@ -824,3 +875,5 @@ IPAddress AtSpi::ipAddressParse(char *_ipAddressType)
     // Return the IP Address.
     return IPAddress(_ipAddress[0], _ipAddress[1], _ipAddress[2], _ipAddress[3]);
 }
+
+WiFiClass WiFi;

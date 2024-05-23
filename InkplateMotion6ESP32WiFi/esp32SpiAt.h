@@ -17,6 +17,12 @@
 // Include file with all AT Commands.
 #include "esp32SpiAtAllCommands.h"
 
+// Include HTTP class for ESP32 AT Commands.
+#include "esp32SpiAtHttp.h"
+
+// Data buffer for AT Commands (in bytes).
+#define INKPLATE_ESP32_AT_CMD_BUFFER_SIZE 8192ULL
+
 // GPIO pin for the ESP32 Power Supply Switch.
 #define INKPLATE_ESP32_PWR_SWITCH_PIN PG9
 
@@ -29,16 +35,22 @@
 
 // Create class for the AT commands over SPI
 
-class AtSpi
+class WiFiClass
 {
     public:
-        AtSpi();
+        WiFiClass();
+
+        // Public ESP32-C3 system functions.
         bool init();
         bool power(bool _en);
         bool sendAtCommand(char *_atCommand);
         bool getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
+        bool getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
         bool modemPing();
         bool storeSettingsInNVM(bool _store);
+        char* getDataBuffer();
+
+        // Public ESP32 WiFi Functions.
         bool setMode(uint8_t _wifiMode);
         bool begin(char *_ssid, char* _pass);
         bool connected();
@@ -77,7 +89,7 @@ class AtSpi
         IPAddress ipAddressParse(char *_ipAddressType);
 
         // Data buffer for the ESP32 SPI commands.
-        char _dataBuffer[8192];
+        char _dataBuffer[INKPLATE_ESP32_AT_CMD_BUFFER_SIZE];
 
         // Variables for WiFi Scan.
         int16_t _startApindex[40];
@@ -88,5 +100,8 @@ class AtSpi
         // Array for storing parsed MAC address.
         char _esp32MacAddress[19];
 };
+
+// For easier user usage of the WiFi functionallity.
+extern WiFiClass WiFi;
 
 #endif

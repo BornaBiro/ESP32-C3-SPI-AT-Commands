@@ -8,6 +8,7 @@
 static const char esp32AtPingCommand[] = "AT\r\n";
 static const char esp32AtPingResponse[] = "AT\r\n\r\nOK\r\n";
 static const char esp32AtCmdResponse[] = "\r\n\r\nOK\r\n";
+static const char esp32AtCmdResponseError[] = "\r\n\r\nERROR\r\n";
 
 // ESP32 WiFi Commands
 // ESP32 AT Command to disconnect from the AP.
