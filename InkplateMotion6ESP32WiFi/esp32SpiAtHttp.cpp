@@ -19,7 +19,7 @@ bool WiFiClient::connect(const char* _url)
     if (!WiFi.sendAtCommand(_dataBuffer)) return false;
 
     // Wait for the response. Echo from sent command.
-    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 10ULL)) return false;
+    if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 10ULL)) return false;
 
     // Wait for the first data chunk. If timeout occured, return false.
     if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 30000ULL)) return false;
@@ -38,7 +38,7 @@ int WiFiClient::available()
 {
     if (_bufferLen == 0)
     {
-        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 1000ULL))
+        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 5000ULL))
         {
             if (strstr(_dataBuffer, esp32AtCmdResponseError) == NULL)
             {
@@ -79,68 +79,6 @@ char WiFiClient::read()
     return _c;
 }
 
-// bool WiFiClient::cleanHttpResponse(char *_buffer, uint16_t *_len)
-// {
-//     // Check for the pointers.
-//     if ((_buffer == NULL) || (_len == NULL)) return false;
-
-//     // Get the length of the response.
-//     int _totalLen = strlen(_buffer);
-
-//     // First test if this is really proper HTTPS response.
-//     int _dataLen = 0;
-//     char *_responseStart = strstr(_buffer, "+HTTPCGET:");
-    
-//     // Check if is not some data.
-//     if (_responseStart != _buffer)
-//     {
-//         Serial.println("Can't find start");
-//         return false;
-//     }
-
-//     // Try to parse the length of the data.
-//     int _found = sscanf(_responseStart, "+HTTPCGET:%d,", &_dataLen);
-//     if(_found != 1)
-//     {
-//         Serial.println("HTTP Len can't be found and parsed");
-//         return false;
-//     }
-
-//     // Calculate the shift (to remove AT Command response and also CR LF at the end).
-//     uint16_t _shift = _totalLen - _dataLen - 2;
-
-//     // Check the shift length, it should be small. If the shift is large, must be something wrong.
-//     if (_shift > 15)
-//     {
-//         Serial.println("\n\n\n\n");
-//         Serial.print("Shift is too large! ");   
-//         Serial.println(_shift, DEC);
-//         Serial.print("_totalLen: ");   
-//         Serial.println(_totalLen, DEC);
-//         Serial.print("_dataLen: ");   
-//         Serial.println(_dataLen, DEC);
-
-//         Serial.println("\n\n----------------------");
-//         Serial.println(_buffer);
-//         Serial.println("\n\n----------------------");
-//         return false;
-//     }
-
-//     // Move the response to the start.
-//     memcpy(_buffer, _buffer + _shift, _dataLen);
-
-//     // Add a terminating char at the end.
-//     _buffer[_dataLen] = '\0';
-
-//     Serial.print(_buffer);
-
-//     // Copy the data length into the pointer.
-//     *_len = _dataLen;
-
-//     // Everything went ok? Return true for success.
-//     return true;
-// }
-
 int WiFiClient::cleanHttpGetResponse(char *_response, uint16_t *_cleanedSize)
 {
     // Set the pointer for search.
@@ -171,14 +109,12 @@ int WiFiClient::cleanHttpGetResponse(char *_response, uint16_t *_cleanedSize)
             // If is found and it's 12 to 15 places after the start position it is valid.
             if ((_commaPos != NULL) && (_commaPos - _startOfResponse) <= 15)
             {
-                // Try to find the CRLF.
-                char *_crlfPos = strstr(_commaPos, "\r\n");
-            
-                // Check if is vaild. It must match the data length.
-                if ((_crlfPos != NULL) && (_crlfPos - _commaPos - 1) == _dataChunkLen)
+                // Check if is vaild. It must find \r\n at the end of the data.
+                char _crChar = *(_commaPos + 1 + _dataChunkLen);
+                char _lfChar = *(_commaPos + 1 + _dataChunkLen + 1);
+                
+                if ((_crChar == '\r') && (_lfChar == '\n')) 
                 {
-                    //printf("Everything is ok! Start %.20s\r\n", _commaPos + 1);
-                    
                     // Move all data at proper position.
                     memmove(_writePointer, _commaPos + 1, _dataChunkLen);
                     

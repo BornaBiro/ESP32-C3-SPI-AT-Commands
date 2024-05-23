@@ -148,7 +148,8 @@ void setup()
     WiFiClient myClient;
     uint32_t totalSize = 0;
 
-    if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
+    if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum_long.txt"))
+    //if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
     {
         inkplate.println("Connected!");
         inkplate.partialUpdate(true);
@@ -168,6 +169,7 @@ void setup()
                 myBuffer[n] = 0;
                 
                 inkplate.print(myBuffer);
+                //Serial.print(myBuffer);
             }
         }
         inkplate.partialUpdate(true);

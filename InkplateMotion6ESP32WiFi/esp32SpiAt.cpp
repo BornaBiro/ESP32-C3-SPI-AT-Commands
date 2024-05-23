@@ -76,6 +76,9 @@ bool WiFiClass::power(bool _en)
 
         // Disable stroing data in NVM. Return false if failed.
         if (!storeSettingsInNVM(false)) return false;
+
+        // Disconnect from any previous WiFi network.
+        disconnect();
     }
     else
     {
