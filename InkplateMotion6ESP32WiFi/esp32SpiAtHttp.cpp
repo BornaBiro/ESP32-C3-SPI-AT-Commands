@@ -14,21 +14,45 @@ bool WiFiClient::connect(const char* _url)
     // Get the RX Buffer Data Buffer pointer from the WiFi library.
     _dataBuffer = WiFi.getDataBuffer();
 
+    // First set the message filter to set the modem in pass-trough mode.
+    // Remove the header and "enter" at the end.
+    if (!WiFi.sendAtCommand("AT+SYSMSGFILTERCFG=1,18,3\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+    if (!WiFi.sendAtCommand("^+HTTPCGET:[0-9]*,\r\n$")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+    if (!WiFi.sendAtCommand((char*)esp32AtCmdEscapeChar));
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Remove "OK" at the end.
+    if (!WiFi.sendAtCommand("AT+SYSMSGFILTERCFG=1,0,7\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+    if (!WiFi.sendAtCommand("\r\nOK\r\n$")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Enable the message filter.
+    if (!WiFi.sendAtCommand("AT+SYSMSGFILTER=1\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Turn the Echo off.
+    if (!WiFi.sendAtCommand("ATE0\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
     // Try to connect to the host. Return false if failed.
-    sprintf(_dataBuffer, "AT+HTTPCGET=\"%s\"\r\n", _url);
+    sprintf(_dataBuffer, "AT+HTTPCGET=\"%s\",8000,8000\r\n", _url);
     if (!WiFi.sendAtCommand(_dataBuffer)) return false;
 
-    // Wait for the response. Echo from sent command.
-    if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 10ULL)) return false;
+    // // Wait for the response. Echo from sent command.
+    // if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 10ULL)) return false;
 
     // Wait for the first data chunk. If timeout occured, return false.
-    if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 30000ULL)) return false;
+    uint16_t _len = 0;
+    if (!WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 30000ULL, &_len)) return false;
 
     // Check for the "ERROR". If error is found, return false.
-    if (strstr(_dataBuffer, esp32AtCmdResponseError) != NULL) return false;
+    //if (strstr(_dataBuffer, esp32AtCmdResponseError) != NULL) return false;
 
-    if (!cleanHttpGetResponse(_dataBuffer, &_bufferLen)) return false;
-
+    //if (!cleanHttpGetResponse(_dataBuffer, &_bufferLen)) return false;
+    _bufferLen += _len;
     _currentPos = _dataBuffer;
 
     return true;
@@ -38,17 +62,18 @@ int WiFiClient::available()
 {
     if (_bufferLen == 0)
     {
-        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 5000ULL))
+        uint16_t _len = 0;
+        if (WiFi.getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 500ULL, &_len))
         {
-            if (strstr(_dataBuffer, esp32AtCmdResponseError) == NULL)
-            {
-                uint16_t _len = 0;
-                if (cleanHttpGetResponse(_dataBuffer, &_len))
-                {
-                    _bufferLen = _len;
+            //if (strstr(_dataBuffer, esp32AtCmdResponseError) == NULL)
+            //{
+                //uint16_t _len = 0;
+                //if (cleanHttpGetResponse(_dataBuffer, &_len))
+                //{
+                    _bufferLen += _len;
                     _currentPos = _dataBuffer;
-                }
-            }
+                //}
+            //}
         }
     }
 
@@ -77,6 +102,25 @@ char WiFiClient::read()
     }
 
     return _c;
+}
+
+bool WiFiClient::end()
+{
+    // Clear all message filters used in http get.
+    if (!WiFi.sendAtCommand("AT+SYSMSGFILTERCFG=0\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Disable the filter.
+    if (!WiFi.sendAtCommand("AT+SYSMSGFILTER=0\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Turn on echo back.
+    // Turn the Echo off.
+    if (!WiFi.sendAtCommand("ATE1\r\n")) return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL)) return false;
+
+    // Everything went ok? Return true for success.
+    return true;
 }
 
 int WiFiClient::cleanHttpGetResponse(char *_response, uint16_t *_cleanedSize)

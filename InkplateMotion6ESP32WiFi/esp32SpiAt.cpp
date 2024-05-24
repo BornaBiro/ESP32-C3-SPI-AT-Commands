@@ -46,6 +46,7 @@ bool WiFiClass::init()
     // Set ESP32 power switch pin.
     pinMode(INKPLATE_ESP32_PWR_SWITCH_PIN, OUTPUT);
 
+    // Try to power on the modem. Return false if failed.  
     if (!power(true)) return false;
 
     // If everything went ok, return true.
@@ -67,18 +68,27 @@ bool WiFiClass::power(bool _en)
         // with the external resistor, we need to wait for the handshake pin to go low first,
         // then wait for the proper handshake event.
         if (!isModemReady()) return false;
+        Serial.println("Modem ready");
 
         // Try to ping modem. Return fail if failed.
         if (!modemPing()) return false;
+        Serial.println("Ping OK");
+
+        // Set ESP32 to its factory settings.
+        if (!systemRestore()) return false;
+        Serial.println("Settings restore OK");
 
         // Initialize WiFi radio.
         if (!wiFiModemInit(true)) return false;
+        Serial.println("WiFi Init ready");
 
         // Disable stroing data in NVM. Return false if failed.
         if (!storeSettingsInNVM(false)) return false;
+        Serial.println("Store in NVM disabled");
 
         // Disconnect from any previous WiFi network.
         disconnect();
+        Serial.println("WiFi Disconnect ready");
     }
     else
     {
@@ -171,7 +181,7 @@ bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned lon
     return true;
 }
 
-bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
+bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout, uint16_t *_rxLen)
 {
     // Timeout variable.
     unsigned long _timeoutCounter = 0;
@@ -209,8 +219,15 @@ bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsign
     // Send read done.
     dataReadEnd();
 
-    // Add null-terminating char.
-    _response[_responseLen] = '\0';
+    // Add null-terminating char if needed.
+    if (_rxLen == NULL)
+    {
+        _response[_responseLen] = '\0';
+    }
+    else
+    {
+        *_rxLen = _responseLen;
+    }
 
     // Evertything went ok? Return true!
     return true;
@@ -228,6 +245,28 @@ bool WiFiClass::modemPing()
     if (strcmp((char*)_dataBuffer, esp32AtPingResponse) != 0) return false;
 
     // If everything went ok, return true.
+    return true;
+}
+
+bool WiFiClass::systemRestore()
+{
+    // Calling this command will set ESP32 to its factory settings.
+    if (!sendAtCommand((char*)esp32AtCmdSystemRestore)) return false;
+
+    // Try to get the response (echo on CMD).
+    if (!getSimpleAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
+
+    // Now wait for the "OK".
+    if (!getSimpleAtResponse(_dataBuffer, sizeof(_dataBuffer), 2000ULL)) return false;
+
+    // Parse the response. It should return OK.
+    if (strstr(_dataBuffer, esp32AtCmdResponseOK) == NULL) return false;
+
+    // Wait for the modem to be ready.
+    getSimpleAtResponse(_dataBuffer, sizeof(_dataBuffer), 2000ULL);
+    getSimpleAtResponse(_dataBuffer, sizeof(_dataBuffer), 2000ULL);
+
+    // Everything went ok? Return true.
     return true;
 }
 
@@ -270,7 +309,7 @@ bool WiFiClass::setMode(uint8_t _wifiMode)
     sendAtCommand(_dataBuffer);
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return false;
 
     // Check for the result.
     if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;
@@ -310,7 +349,7 @@ bool WiFiClass::connected()
     sendAtCommand(_dataBuffer);
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return false;
 
     // Find start of the response. Return false if failed.
     char *_responseStart = strstr(_dataBuffer, "+CWSTATE:");
@@ -329,7 +368,7 @@ bool WiFiClass::disconnect()
     sendAtCommand((char*)esp32AtWiFiDisconnectCommand);
 
     // Wait for the response from the modem.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return false;
 
     // Check if the proper response arrived from the modem.
     if (strcmp(_dataBuffer, esp32AtWiFiDisconnectresponse) != 0) return false;
@@ -344,7 +383,7 @@ int WiFiClass::scanNetworks()
 
     // First the modem will echo back AT Command and do the disconnect.
     // If this does not happen, sometinhg is wrong, return error.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 20UL)) return 0;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return 0;
 
     // Now wait for about 3 seconds for the WiFi scan to complete.
     // If failed for some reason, return error.
@@ -419,7 +458,7 @@ IPAddress WiFiClass::dns(uint8_t i)
     if (!sendAtCommand((char*)esp32AtGetDns)) return INADDR_NONE;
 
     // Wait for the response. If timed out, return invalid IP address.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return INADDR_NONE;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return INADDR_NONE;
 
     // Try to parse the data.
     char *_responseStart = strstr(_dataBuffer, "+CIPDNS:");
@@ -446,7 +485,7 @@ char* WiFiClass::macAddress()
     if (!sendAtCommand((char*)esp32AtWiFiGetMac)) return _invalidMac;
 
     // Wait for the response from the modem.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return _invalidMac;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return _invalidMac;
 
     // Try to parse it.
     char *_responseStart = strstr(_dataBuffer, "+CIPAPMAC:");
@@ -473,7 +512,7 @@ bool WiFiClass::macAddress(char *_mac)
     if (!sendAtCommand(_dataBuffer)) return false;
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 10ULL)) return false;
+    if (!getAtResponse(_dataBuffer, sizeof(_dataBuffer), 40ULL)) return false;
 
     // Get the response. Try to find \r\n\OK\r\n. Return false if failed.
     if (strstr(_dataBuffer, esp32AtCmdResponse) == NULL) return false;

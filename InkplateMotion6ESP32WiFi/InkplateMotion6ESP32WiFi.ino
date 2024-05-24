@@ -148,15 +148,17 @@ void setup()
     WiFiClient myClient;
     uint32_t totalSize = 0;
 
-    if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum_long.txt"))
+    //if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum_long.txt"))
     //if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
+    //if (myClient.connect("https://www.espressif.com/sites/all/themes/espressif/images/about-us/solution-platform.jpg"))
+    if (myClient.connect("https://soldered.com/productdata/2022/12/DSC-0204-Edit-1024x683.jpg"))
     {
-        inkplate.println("Connected!");
-        inkplate.partialUpdate(true);
-        delay(1000);
-        inkplate.clearDisplay();
-        inkplate.setCursor(0, 0);
-        inkplate.display();
+        // inkplate.println("Connected!");
+        // inkplate.partialUpdate(true);
+        // delay(1000);
+        // inkplate.clearDisplay();
+        // inkplate.setCursor(0, 0);
+        // inkplate.display();
 
         while (myClient.available())
         {
@@ -166,10 +168,16 @@ void setup()
                 int n = myClient.read(myBuffer, sizeof(myBuffer));
                 totalSize += n;
 
-                myBuffer[n] = 0;
+                //myBuffer[n] = 0;
                 
-                inkplate.print(myBuffer);
+                //inkplate.print(myBuffer);
                 //Serial.print(myBuffer);
+                // for (int i = 0; i < n; i++)
+                // {
+                //     if (myBuffer[i] <= 0x0F) Serial.print('0');
+                //     Serial.print((uint8_t)myBuffer[i], HEX);
+                //     Serial.print(' ');
+                // }
             }
         }
         inkplate.partialUpdate(true);
@@ -178,6 +186,11 @@ void setup()
     {
         inkplate.println("Failed to get the file");
         inkplate.partialUpdate(true);
+    }
+
+    if (!myClient.end())
+    {
+        Serial.println("Client end problem");
     }
 
     Serial.print("\n\n\n\nTotal size in bytes: ");

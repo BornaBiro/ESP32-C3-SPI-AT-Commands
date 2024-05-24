@@ -45,8 +45,9 @@ class WiFiClass
         bool power(bool _en);
         bool sendAtCommand(char *_atCommand);
         bool getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
-        bool getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout);
+        bool getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout, uint16_t *_rxLen = NULL);
         bool modemPing();
+        bool systemRestore();
         bool storeSettingsInNVM(bool _store);
         char* getDataBuffer();
 

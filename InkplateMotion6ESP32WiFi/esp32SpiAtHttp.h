@@ -18,6 +18,7 @@ class WiFiClient
         int available();
         uint16_t read(char *_buffer, uint16_t _len);
         char read();
+        bool end();
 
         private:
         int cleanHttpGetResponse(char *_buffer, uint16_t *_len);
