@@ -13,12 +13,23 @@ static void esp32HandshakeISR()
     _esp32HandshakePinFlag = true;
 }
 
-// Define a constructor.
+/**
+ * @brief Construct a new Wi-Fi Class:: Wi Fi Class object
+ * 
+ */
 WiFiClass::WiFiClass()
 {
-    // Empty...for now!
+    // Empty...for now.
 }
 
+/**
+ * @brief   Initializes ESP32-C3 Module. It powers up the module, sets it to factory
+ *          settings, initializes WiFi radio and disables storing settings in NVM.
+ * 
+ * @return  bool
+ *          True - Initialization ok, ESP32 is ready.
+ *          False - Initialization failed.  
+ */
 bool WiFiClass::init()
 {
     // Set the hardware level stuff first.
@@ -53,6 +64,16 @@ bool WiFiClass::init()
     return true;
 }
 
+/**
+ * @brief   Power up or powers down the ESP32 module.
+ * 
+ * @param   bool _en
+ *          true - Enable the ESP32 module.
+ *          false - Disables the ESP32 module.
+ * @return  bool
+ *          true - Modem is successfully powered up.
+ *          false - Modem failed to power up.
+ */
 bool WiFiClass::power(bool _en)
 {
     if (_en)
@@ -68,27 +89,27 @@ bool WiFiClass::power(bool _en)
         // with the external resistor, we need to wait for the handshake pin to go low first,
         // then wait for the proper handshake event.
         if (!isModemReady()) return false;
-        Serial.println("Modem ready");
+        // Serial.println("Modem ready");
 
         // Try to ping modem. Return fail if failed.
         if (!modemPing()) return false;
-        Serial.println("Ping OK");
+        // Serial.println("Ping OK");
 
         // Set ESP32 to its factory settings.
         if (!systemRestore()) return false;
-        Serial.println("Settings restore OK");
+        // Serial.println("Settings restore OK");
 
         // Initialize WiFi radio.
         if (!wiFiModemInit(true)) return false;
-        Serial.println("WiFi Init ready");
+        // Serial.println("WiFi Init ready");
 
         // Disable stroing data in NVM. Return false if failed.
         if (!storeSettingsInNVM(false)) return false;
-        Serial.println("Store in NVM disabled");
+        // Serial.println("Store in NVM disabled");
 
         // Disconnect from any previous WiFi network.
         disconnect();
-        Serial.println("WiFi Disconnect ready");
+        // Serial.println("WiFi Disconnect ready");
     }
     else
     {
@@ -104,6 +125,16 @@ bool WiFiClass::power(bool _en)
     return true;
 }
 
+/**
+ * @brief   Methods sends AT command to the modem. It check if the modem is ready to accept the command or not.
+ * 
+ * @param   char *_atCommand
+ *          AT commnds that will be sent to the modem.
+ * @return  bool
+ *          true - AT Command is successfully sent.
+ *          false - AT Command send failed (modem not ready to accept the command).
+ * @note    AT Command needs to have CRLF at the and. method won't at it at the end of the command.
+ */
 bool WiFiClass::sendAtCommand(char *_atCommand)
 {
     // Get the data size.
@@ -128,6 +159,21 @@ bool WiFiClass::sendAtCommand(char *_atCommand)
     return true;
 }
 
+/**
+ * @brief   Methods waits the response from the ESP32. It check if the modem is
+ *          requesting the data read from slave. After it received request,
+ *          timeout triggers if the new data is not available after timeout value.
+ *          Timeout time is measured after the last received packet or char.
+ * 
+ * @param   char *_response
+ *          Buffer where to store response.
+ * @param   uint32_t _bufferLen
+ *          Lenght of the buffer for the response (in bytes, counting the null-terminating char).
+ * @param   unsigned long _timeout
+ *          Timeout value from the last received char or packet in milliseconds.
+ * @return  bool
+ *          true - Response has been received (no error handle for now).
+ */
 bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout)
 {
     // Timeout variable.
@@ -181,6 +227,21 @@ bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned lon
     return true;
 }
 
+/**
+ * @brief   Wait for the reponse form the modem. Method check if the modem is requesting a read from the
+ *          master device. It will wait timeout value until for the response.
+ * 
+ * @param   char *_response
+ *          Buffer where to store response.
+ * @param   uint32_t _bufferLen
+ *          Lenght of the buffer for the response (in bytes, counting the null-terminating char).
+ * @param   unsigned long _timeout
+ *          Timeout value until the packets start arriving.
+ * @param   uint16_t *_rxLen
+ *          Pointer to the variable ehere lenght of the receiveds data will be stored.
+ * @return  bool
+ *          true - Response has been received (no error handle for now).
+ */
 bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsigned long _timeout, uint16_t *_rxLen)
 {
     // Timeout variable.
@@ -233,6 +294,13 @@ bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsign
     return true;
 }
 
+/**
+ * @brief   Method pings the modem (sends "AT" command and waits for AT OK).
+ * 
+ * @return  bool
+ *          true - Modem is available (received AT OK).
+ *          false - Modem is not available.
+ */
 bool WiFiClass::modemPing()
 {
     // Send "AT" AT Command for Modem Ping.
@@ -248,6 +316,13 @@ bool WiFiClass::modemPing()
     return true;
 }
 
+/**
+ * @brief   Methods sends AT command to set factory settings to the ESP32.
+ * 
+ * @return  bool
+ *          true - Modem restored settings to it's factory values.
+ *          false - Modem failed to restore settings. 
+ */
 bool WiFiClass::systemRestore()
 {
     // Calling this command will set ESP32 to its factory settings.
@@ -270,6 +345,17 @@ bool WiFiClass::systemRestore()
     return true;
 }
 
+/**
+ * @brief   Enable or disable storing settings into ESP32 NVM. By default, while power up, it is
+ *          disabled.
+ * 
+ * @param   bool _store
+ *          true - Store settings into ESP32 NVM.
+ *          false - Do not store settings into NVM.
+ * @return  bool
+ *          true - Command executed successfully.
+ *          false - Command failed.
+ */
 bool WiFiClass::storeSettingsInNVM(bool _store)
 {
     // Disable or enable storing data in NVM. By default, storing is enabled, but at the ESP
@@ -291,12 +377,31 @@ bool WiFiClass::storeSettingsInNVM(bool _store)
     return true;
 }
 
+/**
+ * @brief   Get the pointer (address) of the buffer for the SPI data.
+ * 
+ * @return  char*
+ *          Pointer of the SPI buffer for ESP32 communication and commands.
+ */
 char* WiFiClass::getDataBuffer()
 {
     // Return the main RX/TX buffer fopr SPI data.
     return _dataBuffer;
 }
 
+/**
+ * @brief   Methods sets WiFi mode (null, station, SoftAP or station and SoftAP).
+ * 
+ * @param   uint8_t _wifiMode
+ *          Use preddifend macros (can be found in WiFiSPITypedef.h)
+ *          INKPLATE_WIFI_MODE_NULL - Null mode (modem disabled)
+ *          INKPLATE_WIFI_MODE_STA - Station mode
+ *          INKPLATE_WIFI_MODE_AP - Soft Access Point (not implemeted yet!)
+ *          INKPLATE_WIFI_MODE_STA_AP - Both station and Soft Access Point (AP mode still not implemeted!).
+ * @return  bool
+ *          true - Mode set successfully on ESP32
+ *          false - Mode set failed.
+ */
 bool WiFiClass::setMode(uint8_t _wifiMode)
 {
     // Check for the proper mode.
@@ -321,6 +426,19 @@ bool WiFiClass::setMode(uint8_t _wifiMode)
     return true;
 }
 
+/**
+ * @brief   Connect to the access point.
+ * 
+ * @param   char *_ssid
+ *          Char array/pointer to the AP name name.
+ * @param   char *_pass 
+ *          Char array/pointer to the AP password.
+ * @return  bool
+ *          true - Command execution was successfull.
+ *          false -  Command execution failed.
+ * @note    Max characters for password is limited to 63 chars and SSID is only limited to UTF-8 encoding.
+ *          Try to avoid usage following chars: {"}, {,}, {\\}. If used, escape char must be added.
+ */
 bool WiFiClass::begin(char *_ssid, char* _pass)
 {
     // Check for user mistake (null-pointer!).
@@ -330,12 +448,19 @@ bool WiFiClass::begin(char *_ssid, char* _pass)
     sprintf(_dataBuffer, "AT+CWJAP=\"%s\",\"%s\"\r\n", _ssid, _pass);
 
     // Issue an AT Command to the modem.
-    sendAtCommand(_dataBuffer);
+    if (!sendAtCommand(_dataBuffer)) false;
 
     // Do not wait for response eventhough modem will send reponse as soon as the WiFi connection is established.
     return true;
 }
 
+/**
+ * @brief   Methods returns the status of the ESP32 WiFi connection the AP.
+ * 
+ * @return  bool
+ *          true - ESP32 is connected to the AP.
+ *          false - ESP32 is not connected to the AP.
+ */
 bool WiFiClass::connected()
 {
     // Flush AT Read Request.
@@ -361,7 +486,13 @@ bool WiFiClass::connected()
 
     return (_result == 2)?true:false;
 }
-
+/**
+ * @brief   Method executes command to the ESP32 to disconnects from the AP.
+ * 
+ * @return  bool
+ *          true - Command is executed successfully.
+ *          false - Command failed. 
+ */
 bool WiFiClass::disconnect()
 {
     // Sent AT command for WiFi Disconnect.
@@ -376,6 +507,12 @@ bool WiFiClass::disconnect()
     return true;
 }
 
+/**
+ * @brief   Methods prompts ESP32 to run a WiFi network scan. Scan takes about 2 seconds.
+ * 
+ * @return  int
+ *          Number of available networks (including encrypted and hidden ones).
+ */
 int WiFiClass::scanNetworks()
 {
     // Issue a WiFi Scan command.
@@ -402,6 +539,14 @@ int WiFiClass::scanNetworks()
     return _foundWiFiAp;
 }
 
+/**
+ * @brief   Method gets SSID of a scaned network.
+ * 
+ * @param   int _ssidNumber
+ *          Network number on the found network list.
+ * @return  char*
+ *          SSID of the network.
+ */
 char* WiFiClass::ssid(int _ssidNumber)
 {
     // Check if the parsing is successfull. If not, return empty string.
@@ -411,6 +556,15 @@ char* WiFiClass::ssid(int _ssidNumber)
     return _lastUsedSsidData.ssidName;
 }
 
+/**
+ * @brief   Method gets auth. status of the selected network after the scan.
+ * 
+ * @param   int _ssidNumber
+ *          Network number on the found network list.
+ * @return  bool
+ *          true - Network is encrypted.
+ *          false - Network is open.
+ */
 bool WiFiClass::auth(int _ssidNumber)
 {
     // Parse the found network data.
@@ -420,6 +574,14 @@ bool WiFiClass::auth(int _ssidNumber)
     return _lastUsedSsidData.authType?true:false;
 }
 
+/**
+ * @brief   Method gets the RRIS value of the selected scaned networtk.
+ * 
+ * @param   int _ssidNumber
+ *          Network number on the found network list.
+ * @return  int
+ *          RSSI value in dBm of the selected network.
+ */
 int WiFiClass::rssi(int _ssidNumber)
 {
     // Parse the found network data.
@@ -429,21 +591,48 @@ int WiFiClass::rssi(int _ssidNumber)
     return _lastUsedSsidData.rssi;
 }
 
+/**
+ * @brief   Obtain a local IP.
+ * 
+ * @return  IPAddress
+ *          Returns the local IP with Arduino IPAddress class.
+ */
 IPAddress WiFiClass::localIP()
 {
     return ipAddressParse("ip");
 }
 
+/**
+ * @brief   Get a gateway IP Address.
+ * 
+ * @return  IPAddress
+ *          Returns the Gateway IP with Arduino IPAddress class.
+ */
 IPAddress WiFiClass::gatewayIP()
 {
     return ipAddressParse("gateway");
 }
 
+/**
+ * @brief   Get a network subnet mask.
+ * 
+ * @return  IPAddress
+ *          Returns the network subnet mask with Arduino IPAddress class.
+ */
 IPAddress WiFiClass::subnetMask()
 {
     return ipAddressParse("netmask");
 }
 
+/**
+ * @brief   Get the DNS of the primary or secondary DNS.
+ * 
+ * @param   uint8_t i
+ *          0 - Get the DNS IP Address of the primary DNS.
+ *          1 - Get the DNS IP Address of the secondary DNS.
+ * @return  IPAddress
+ *          Returns the selected DNS IP Address with Arduino IPAddress class.
+ */
 IPAddress WiFiClass::dns(uint8_t i)
 {
     // Filter out the selected DNS. It can only be three DNS IP Addreses.
@@ -451,6 +640,12 @@ IPAddress WiFiClass::dns(uint8_t i)
 
     // DNS IP addresses array.
     int _dnsIpAddresses[3][4];
+
+    // Clear the array.
+    memset(_dnsIpAddresses[0], 0, sizeof(int) * 4);
+    memset(_dnsIpAddresses[1], 0, sizeof(int) * 4);
+    memset(_dnsIpAddresses[2], 0, sizeof(int) * 4);
+
     // Flag if the static or dynamic IP is used on ESP32.
     int _dhcpFlag = 0;
 
@@ -472,13 +667,21 @@ IPAddress WiFiClass::dns(uint8_t i)
     &_dnsIpAddresses[1][0], &_dnsIpAddresses[1][1], &_dnsIpAddresses[1][2], &_dnsIpAddresses[1][3], 
     &_dnsIpAddresses[2][0], &_dnsIpAddresses[2][1], &_dnsIpAddresses[2][2], &_dnsIpAddresses[2][3]);
 
-    // Check if all is parsed correctly. If not, return invalid IP Address.
-    if (_res != 13) return INADDR_NONE;
+    // Check if all is parsed correctly, it should find at least one DNS. If not, return invalid IP Address.
+    if (_res < 4) return INADDR_NONE;
 
     // Return wanted DNS.
     return IPAddress(_dnsIpAddresses[i][0], _dnsIpAddresses[i][1], _dnsIpAddresses[i][2], _dnsIpAddresses[i][3]);
 }
 
+/**
+ * @brief   Get the MAC address of the ESP32. It will be returned with char array
+ *          ("aa:bb:cc:11:22:33").
+ * 
+ * @return  char*
+ *          MAC Address of the ESP32.
+ * @note    Original MAC can be changed with WiFiClass::macAddress(char *_mac) method.
+ */
 char* WiFiClass::macAddress()
 {
     // Send AT Command for getting AT Command from the module.
@@ -503,6 +706,17 @@ char* WiFiClass::macAddress()
     return _esp32MacAddress;
 }
 
+/**
+ * @brief   Method set the MAC address of the ESP32.
+ * 
+ * @param   char *_mac
+ *          Pointer to the char array of the new MAC address. String with the 
+ *          new MAC address must have "aa:bb:cc:dd:ee:ff" format.
+ * @return  bool
+ *          true - New MAC address is set.
+ *          false - New MAC address set failed.
+ * @note    MAC address only can be set if the WiFI mode is set to SoftAP mode.
+ */
 bool WiFiClass::macAddress(char *_mac)
 {
     // Create a string for the new MAC address.
@@ -521,8 +735,29 @@ bool WiFiClass::macAddress(char *_mac)
     return true;
 }
 
+/**
+ * @brief   Methods enables complete WiFi config. Set LocalIP, GatewayIP, Subnet Mask and DNS with one call.
+ *          To keep original value of the one IP address, use INADDR_NONE as parameter.
+ * 
+ * @param   IPAddress _staticIP
+ *          Set the local IP Address. To keep the default one, use INADDR_NONE.
+ * @param   IPAddress _gateway
+ *          Set the gateway IP Address. To keep the default one, use INADDR_NONE.
+ * @param   IPAddress _subnet
+ *          Set the sunbet mask. To keep the default one, use INADDR_NONE.
+ * @param   IPAddress _dns1
+ *          Set the Primary DNS IP Address. To keep the default one, use INADDR_NONE.
+ * @param   IPAddress _dns2
+ *          Set the Secondary DNS IP Address. To keep the default one, use INADDR_NONE.
+ * @return  bool
+ *          true - New IP config is set.
+ *          false - New IP config set failed.
+ */
 bool WiFiClass::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2)
 {
+    // Return value variable.
+    bool _retValue = true;
+
     // First get the current settings since not all of above must be included.
     if (_staticIP == INADDR_NONE)
     {
@@ -550,9 +785,54 @@ bool WiFiClass::config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subne
     }
 
     // Now send modified data.
+    // Check if anything with the IP config have been modified. If so, send new settings.
+    if ((_staticIP != INADDR_NONE) || (_gateway != INADDR_NONE) || (_subnet != INADDR_NONE))
+    {
+        // Send the AT commands for the new IP config.
+        sprintf(_dataBuffer, "AT+CIPSTA=\"%d.%d.%d.%d\",\"%d.%d.%d.%d\",\"%d.%d.%d.%d\"\r\n", _staticIP[0], _staticIP[1], _staticIP[2], _staticIP[3], _gateway[0], _gateway[1], _gateway[2], _gateway[3], _subnet[0], _subnet[1], _subnet[2], _subnet[3]);
+
+        // Send AT command.
+        sendAtCommand(_dataBuffer);
+
+        // Wait for the response.
+        getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL);
+
+        // Check for the response. Set return value to false is setting IP has failed.
+        if (strstr(_dataBuffer, esp32AtCmdResponseOK) == NULL) _retValue = false;
+    }
+
+    // Check the same thing, but for DNS.
+    if ((_dns1 != INADDR_NONE) || (_dns2 != INADDR_NONE))
+    {
+        // Create AT command for the DNS settings.
+        sprintf(_dataBuffer, "AT+CIPDNS=1,\"%d.%d.%d.%d\",\"%d.%d.%d.%d\"\r\n", _dns1[0], _dns1[1], _dns1[2], _dns1[3], _dns2[0], _dns2[1], _dns2[2], _dns2[3]);
+        
+        // Send AT command.
+        sendAtCommand(_dataBuffer);
+
+        // Wait for the response.
+        getAtResponse(_dataBuffer, sizeof(_dataBuffer), 50ULL);
+
+        // Check for the response. Set return value to false is setting IP has failed.
+        if (strstr(_dataBuffer, esp32AtCmdResponseOK) == NULL) _retValue = false;
+    }
     
+    // Return true if everything went ok or false if something failed (IP config or DNS).
+    return _retValue;
 }
 
+/**
+ * @brief   Wait for the ESP32 handshake pin to trigger master request using digitalRead()
+ *          (polling). This funciton is not used anymore.
+ * 
+ * @param   uint32_t _timeoutValue
+ *          Timeout value until the request from the ESP32 happens in milliseconds.
+ * @param   _validState
+ *          Is the trigger state for the handshake pin HIGH or LOW.
+ * @return  bool
+ *          true - Handshake pin trigger detected.
+ *          false - Timeout, no handshake trigger detected.
+ */
 bool WiFiClass::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
 {
     // Variable for the timeout. Also capture the current state.
@@ -581,6 +861,15 @@ bool WiFiClass::waitForHandshakePin(uint32_t _timeoutValue, bool _validState)
     return true;
 }
 
+/**
+ * @brief   Wait for the ESP32 handshake pin to trigger master request using interrutps.
+ * 
+ * @param   uint32_t _timeoutValue
+ *          Timeout value until the request from the ESP32 happens in milliseconds.
+ * @return  bool
+ *          true - Handshake pin trigger detected.
+ *          false - Timeout, no handshake trigger detected.
+ */
 bool WiFiClass::waitForHandshakePinInt(uint32_t _timeoutValue)
 {
     // First, clear the flag status.
@@ -602,6 +891,16 @@ bool WiFiClass::waitForHandshakePinInt(uint32_t _timeoutValue)
     return true;
 }
 
+/**
+ * @brief   Get ESP32 slave status. It is used right after the ESP32 sends handshake (ESP32 issues
+ *          request from the master to read the data from the ESP32).
+ * 
+ * @param   uint16_t _len
+ *          Number of bytes requested waiting to be read by thje master from the ESP32.
+ * @return  uint8_t
+ *          Return slave status (INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE or
+ *          INKPLATE_ESP32_SPI_SLAVE_STATUS_WRITEABLE).
+ */
 uint8_t WiFiClass::requestSlaveStatus(uint16_t *_len)
 {
     // Make a union/struct for data part of the SPI Command.
@@ -631,6 +930,14 @@ uint8_t WiFiClass::requestSlaveStatus(uint16_t *_len)
     return _slaveStatus.elements.status;
 }
 
+/**
+ * @brief   Send data to the ESP32 and at the same time receive new data from ESP32.
+ * 
+ * @param   spiAtCommandTypedef *_spiPacket
+ *          Pointer to the spiAtCommandTypedef to describe data packet.
+ * @param   uint16_t _spiDataLen
+ *          Lenght of the data part only, excluding spiAtCommandTypedef (in bytes).
+ */
 void WiFiClass::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
     // Get the SPI STM32 HAL Typedef Handle.
@@ -653,6 +960,14 @@ void WiFiClass::transferSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spi
     HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 }
 
+/**
+ * @brief   Method only sends SPI data to the ESP32.
+ * 
+ * @param   spiAtCommandTypedef *_spiPacket
+ *          Pointer to the spiAtCommandTypedef to describe data packet.
+ * @param   uint16_t _spiDataLen
+ *          Lenght of the data part only, excluding spiAtCommandTypedef (in bytes).
+ */
 void WiFiClass::sendSpiPacket(spiAtCommandTypedef *_spiPacket, uint16_t _spiDataLen)
 {
     // Get the SPI STM32 HAL Typedef Handle.
@@ -832,19 +1147,19 @@ bool WiFiClass::isModemReady()
             // Compare it. It should find "\r\nready\r\n".
             if (strcmp("\r\nready\r\n", (char*)_dataBuffer) != 0)
             {
-                Serial.println("modem ready parse error!");
+                // Serial.println("modem ready parse error!");
                 return false;
             }
         }
         else
         {
-            Serial.println("Wrong slave request");
+            // Serial.println("Wrong slave request");
             return false;
         }
     }
     else
     {
-        Serial.println("Handshake not detected");
+        // Serial.println("Handshake not detected");
         return false;
     }
 

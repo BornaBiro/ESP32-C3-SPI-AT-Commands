@@ -66,7 +66,7 @@ class WiFiClass
         IPAddress dns(uint8_t i);
         char* macAddress();
         bool macAddress(char *_mac);
-        bool config(IPAddress _staticIP, IPAddress _gateway, IPAddress _subnet, IPAddress _dns1, IPAddress _dns2);
+        bool config(IPAddress _staticIP = INADDR_NONE, IPAddress _gateway = INADDR_NONE, IPAddress _subnet = INADDR_NONE, IPAddress _dns1 = INADDR_NONE, IPAddress _dns2 = INADDR_NONE);
 
     private:
 

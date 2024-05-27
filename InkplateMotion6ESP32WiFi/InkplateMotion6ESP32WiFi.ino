@@ -26,7 +26,7 @@ void setup()
 
     // Set the text.
     inkplate.setCursor(0, 0);
-    inkplate.setTextSize(1);
+    inkplate.setTextSize(2);
     inkplate.setTextColor(BLACK, WHITE);
     inkplate.setTextWrap(true);
 
@@ -43,6 +43,8 @@ void setup()
     }
     inkplate.println("ESP32 Initialization OK!");
     inkplate.partialUpdate(true);
+
+    //WiFi.config(IPAddress(192, 168, 71, 3), IPAddress(192, 168, 71, 1), IPAddress(255, 255, 255, 0), IPAddress(8, 8, 8, 8), IPAddress(8, 8, 4, 4));
 
     // Set to Access Point to change the MAC Address.
     if (!WiFi.setMode(INKPLATE_WIFI_MODE_AP))
@@ -101,8 +103,8 @@ void setup()
             inkplate.print(". RSSI: ");
             inkplate.print(WiFi.rssi(i), DEC);
             inkplate.print(' ');
-            inkplate.print(WiFi.auth(i)?'*':' ');
-            inkplate.println(WiFi.ssid(i));
+            inkplate.print(WiFi.ssid(i));
+            inkplate.println(WiFi.auth(i)?'*':' ');
         }
     }
     else
@@ -148,10 +150,10 @@ void setup()
     WiFiClient myClient;
     uint32_t totalSize = 0;
 
-    //if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum_long.txt"))
-    //if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
-    //if (myClient.connect("https://www.espressif.com/sites/all/themes/espressif/images/about-us/solution-platform.jpg"))
-    if (myClient.connect("https://soldered.com/productdata/2022/12/DSC-0204-Edit-1024x683.jpg"))
+    // if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum_long.txt"))
+    // if (myClient.connect("https://raw.githubusercontent.com/BornaBiro/ESP32-C3-SPI-AT-Commands/main/lorem_ipsum.txt"))
+    if (myClient.connect("https://www.espressif.com/sites/all/themes/espressif/images/about-us/solution-platform.jpg"))
+    // if (myClient.connect("https://soldered.com/productdata/2022/12/DSC-0204-Edit-1024x683.jpg"))
     {
         // inkplate.println("Connected!");
         // inkplate.partialUpdate(true);
@@ -159,6 +161,10 @@ void setup()
         // inkplate.clearDisplay();
         // inkplate.setCursor(0, 0);
         // inkplate.display();
+
+        Serial.print("Connected, file size: ");
+        Serial.print(myClient.size(), DEC);
+        Serial.println("bytes");
 
         while (myClient.available())
         {
@@ -193,12 +199,10 @@ void setup()
         Serial.println("Client end problem");
     }
 
-    Serial.print("\n\n\n\nTotal size in bytes: ");
+    Serial.print("\n\n\n\nTotal received bytes: ");
     Serial.println(totalSize, DEC);
 
     Serial.println("Done!");
-
-    //wifi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
 }
 
 void loop()
