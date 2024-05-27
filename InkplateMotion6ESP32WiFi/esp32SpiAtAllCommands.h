@@ -2,8 +2,6 @@
 #ifndef __ESP32_SPI_AT_ALL_COMMANDS_H__
 #define __ESP32_SPI_AT_ALL_COMMANDS_H__
 
-// static const char esp32AtSpiEmptyString[] = {" "};
-
 // ESP32 System AT Commands
 static const char esp32AtPingCommand[] = "AT\r\n";
 static const char esp32AtPingResponse[] = "AT\r\n\r\nOK\r\n";
