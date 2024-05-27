@@ -99,8 +99,8 @@ bool WiFiClass::power(bool _en)
         // Serial.println("Ping OK");
 
         // Set ESP32 to its factory settings.
-        if (!systemRestore())
-            return false;
+        //if (!systemRestore())
+        //    return false;
         // Serial.println("Settings restore OK");
 
         // Initialize WiFi radio.
@@ -198,9 +198,6 @@ bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned lon
         // Wait for the response by checking the handshake pin.
         if (_esp32HandshakePinFlag)
         {
-            // Clear the flag.
-            _esp32HandshakePinFlag = false;
-
             // Update the timeout!
             _timeoutCounter = millis();
 
@@ -225,6 +222,9 @@ bool WiFiClass::getAtResponse(char *_response, uint32_t _bufferLen, unsigned lon
 
             // Send read done.
             dataReadEnd();
+
+            // Clear the flag.
+            _esp32HandshakePinFlag = false;
         }
     }
 
@@ -269,9 +269,6 @@ bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsign
     if (!_esp32HandshakePinFlag)
         return false;
 
-    // Clear handshake pin.
-    _esp32HandshakePinFlag = false;
-
     // Otherwise read the data.
     // Check the slave status, if must be INKPLATE_ESP32_SPI_SLAVE_STATUS_READABLE
     uint8_t _slaveStatus = requestSlaveStatus(&_responseLen);
@@ -287,6 +284,9 @@ bool WiFiClass::getSimpleAtResponse(char *_response, uint32_t _bufferLen, unsign
         // Read the data.
         dataRead(_response, _responseLen);
     }
+
+    // Clear handshake pin.
+    _esp32HandshakePinFlag = false;
 
     // Send read done.
     dataReadEnd();
@@ -499,7 +499,7 @@ bool WiFiClass::connected()
     sendAtCommand(_dataBuffer);
 
     // Wait for the response.
-    if (!getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL))
+    if (!getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL))
         return false;
 
     // Find start of the response. Return false if failed.
@@ -512,7 +512,16 @@ bool WiFiClass::connected()
     if (sscanf(_responseStart, "+CWSTATE:%d", &_result) != 1)
         return false;
 
-    return (_result == 2) ? true : false;
+    if (_result == 2)
+    {
+        // Just classic questonable ESP32 things...must read WL CONNECTED, otherwise ESP32 hangs.
+        getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 250ULL);
+
+        // Return true fir connection success.
+        return true;
+    }
+
+    return false;
 }
 /**
  * @brief   Method executes command to the ESP32 to disconnects from the AP.

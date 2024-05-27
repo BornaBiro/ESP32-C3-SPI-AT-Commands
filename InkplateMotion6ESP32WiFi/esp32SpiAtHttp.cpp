@@ -33,6 +33,21 @@ bool WiFiClient::connect(const char *_url)
     // Get the RX Buffer Data Buffer pointer from the WiFi library.
     _dataBuffer = WiFi.getDataBuffer();
 
+    // Set the URL since HTTPCGET has limitations on the URL size and on characters.
+    sprintf(_dataBuffer, "AT+HTTPURLCFG=%d\r\n", strlen(_url));
+    if (!WiFi.sendAtCommand(_dataBuffer))
+        return false;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL))
+        return false;
+    if (!WiFi.sendAtCommand((char*)_url));
+        ;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL))
+        return false;
+    if (!WiFi.sendAtCommand((char *)esp32AtCmdEscapeChar))
+        ;
+    if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL))
+        return false;
+
     // First set the message filter to set the modem in pass-trough mode.
     // Remove the header and "enter" at the end.
     if (!WiFi.sendAtCommand("AT+SYSMSGFILTERCFG=1,18,3\r\n"))
@@ -74,7 +89,7 @@ bool WiFiClient::connect(const char *_url)
     _fileSize = getFileSize((char *)_url, 30000ULL);
 
     // Try to connect to the host. Return false if failed.
-    sprintf(_dataBuffer, "AT+HTTPCGET=\"%s\",4096,4096,10000\r\n", _url);
+    sprintf(_dataBuffer, "AT+HTTPCGET=\"\",4096,4096,10000\r\n", _url);
     if (!WiFi.sendAtCommand(_dataBuffer))
         return false;
 
@@ -261,7 +276,7 @@ int WiFiClient::getFileSize(char *_url, uint32_t _timeout)
     int _size = 0;
 
     // Make a AT commands for the file size.
-    sprintf(_dataBuffer, "AT+HTTPGETSIZE=\"%s\"\r\n", _url);
+    sprintf(_dataBuffer, "AT+HTTPGETSIZE=\"\"\r\n", _url);
 
     // Send a AT commnds to the modem. Return 0 if failed.
     if (!WiFi.sendAtCommand(_dataBuffer))
