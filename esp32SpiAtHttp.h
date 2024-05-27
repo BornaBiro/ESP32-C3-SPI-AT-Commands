@@ -19,6 +19,7 @@ class WiFiClient
     char read();
     bool end();
     int size();
+    bool addHeader(char *_header);
 
   private:
     int cleanHttpGetResponse(char *_buffer, uint16_t *_len);

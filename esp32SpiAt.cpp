@@ -99,8 +99,8 @@ bool WiFiClass::power(bool _en)
         // Serial.println("Ping OK");
 
         // Set ESP32 to its factory settings.
-        //if (!systemRestore())
-        //    return false;
+        if (!systemRestore())
+            return false;
         // Serial.println("Settings restore OK");
 
         // Initialize WiFi radio.
@@ -342,21 +342,12 @@ bool WiFiClass::systemRestore()
     if (!sendAtCommand((char *)esp32AtCmdSystemRestore))
         return false;
 
-    // Try to get the response (echo on CMD).
-    if (!getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL))
-        return false;
+    // ESP32 nonsense. Wait for 2 seconds after memory restore.
+    // Using handshake doesn't work reliably since it fires multiple times.
+    delay(2200);
 
-    // Now wait for the "OK".
-    if (!getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 2000ULL))
-        return false;
-
-    // Parse the response. It should return OK.
-    if (strstr(_dataBuffer, esp32AtCmdResponseOK) == NULL)
-        return false;
-
-    // Wait for the modem to be ready.
-    getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 2000ULL);
-    getSimpleAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 2000ULL);
+    // Read a response to clear the flag.
+    if (!getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL)) return false;
 
     // Everything went ok? Return true.
     return true;
@@ -515,7 +506,7 @@ bool WiFiClass::connected()
     if (_result == 2)
     {
         // Just classic questonable ESP32 things...must read WL CONNECTED, otherwise ESP32 hangs.
-        getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 250ULL);
+        getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 200ULL);
 
         // Return true fir connection success.
         return true;

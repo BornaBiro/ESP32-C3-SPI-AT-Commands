@@ -8,7 +8,8 @@
  */
 WiFiClient::WiFiClient()
 {
-    // Empty...for now.
+    // Get the RX Buffer Data Buffer pointer from the WiFi library.
+    _dataBuffer = WiFi.getDataBuffer();
 }
 
 /**
@@ -30,10 +31,8 @@ bool WiFiClient::connect(const char *_url)
     _bufferLen = 0;
     _fileSize = 0;
 
-    // Get the RX Buffer Data Buffer pointer from the WiFi library.
-    _dataBuffer = WiFi.getDataBuffer();
-
     // Set the URL since HTTPCGET has limitations on the URL size and on characters.
+    // Escape char must be sent at the end!
     sprintf(_dataBuffer, "AT+HTTPURLCFG=%d\r\n", strlen(_url));
     if (!WiFi.sendAtCommand(_dataBuffer))
         return false;
@@ -244,6 +243,9 @@ bool WiFiClient::end()
     if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 20ULL))
         return false;
 
+    // Clear all HTTP headers.
+    if (!addHeader(NULL)) return false;
+
     // Everything went ok? Return true for success.
     return true;
 }
@@ -258,6 +260,37 @@ int WiFiClient::size()
 {
     // Return the file size.
     return _fileSize;
+}
+
+bool WiFiClient::addHeader(char *_header)
+{
+    // Check if the _header is equal to NULL. If so,
+    // clear all the headers.
+    if (_header == NULL)
+    {
+        if (!WiFi.sendAtCommand("AT+HTTPCHEAD=0\r\n"));
+        if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL)) return false;
+    }
+    else
+    {
+        // Otherwise, add header to the HTTP request.
+        sprintf(_dataBuffer, "AT+HTTPCHEAD=%d\r\n", strlen(_header));
+
+        // Send the command and the HTTP header size. 
+        if (!WiFi.sendAtCommand(_dataBuffer)) return false;
+        if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL)) return false;
+
+        // Send the header itself.
+        if (!WiFi.sendAtCommand(_header)) return false;
+        if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL)) return false;
+
+        // Send escape char to end the AT command.
+        if (!WiFi.sendAtCommand((char *)esp32AtCmdEscapeChar))
+        if (!WiFi.getAtResponse(_dataBuffer, INKPLATE_ESP32_AT_CMD_BUFFER_SIZE, 40ULL)) return false;
+    }
+
+    // Everything went ok? Return true!
+    return true;
 }
 
 /**
@@ -292,7 +325,6 @@ int WiFiClient::getFileSize(char *_url, uint32_t _timeout)
     // Parse the reponse. Return 0 if something failed.
     if (strstr(_dataBuffer, "+HTTPGETSIZE:"))
     {
-        Serial.println("Found them!");
         if (sscanf(_dataBuffer, "+HTTPGETSIZE:%d", &_size) != 1)
             return 0;
     }
